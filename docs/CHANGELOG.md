@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Added a boot-to-quiz elementary arithmetic game: on power-on the device shows a two-digit `+`, `-`, `x`, `/` problem with four answer choices, moved with UP/DOWN and confirmed with OK. A correct pick shows `CORRECT` and waits for any key, a wrong pick shows `TRY AGAIN` and lets the player re-select, and a second wrong pick reveals the answer before waiting for a key to advance, looping forever. The question generation and two-attempt state machine live in a host-tested `main/math_quiz.c`; `main/demo_math.c` renders them on the shared `ui_pixel` theme with a top-right battery readout, and long-pressing OK still returns to the demo menu.
+
 - Added the supplied 80-byte CW2017 profile for the specified 520 mAh cell, including content/update-flag checks, verified writes, the required restart sequence, and bounded SOC-readiness polling.
 
 - Reorganized the documentation by function area with a dual entry point: the root `AGENTS.md` is now a thin router (hard constraints + task routing only) and the detailed AI workflow lives in `docs/development/ai-guide.md`; `agent-guide.md` was folded in. `docs/development/` gained a second level (`engineering/`, `ci/`, `release/`), and the `plays/` application archive and `experiences/` moved into a `docs/reference/` area with a dedicated README. Removed `docs/software-design/` (empty scaffold); folded the three `assets/{fonts,images,music}/README` leaves into the `assets/` README; flattened the six `project-completion` sub-documents into a single file; and unified each directory to a single README, eliminating every `INDEX` file and a duplicated experience index. All cross-references and bibliographic links were updated; no content was dropped.

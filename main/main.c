@@ -1,5 +1,7 @@
 // main/main.c —— FoloToy AI Passport BSP 驱动参考示例:初始化 + 菜单 + 按键分发。
 //
+// 开机直接进入 Math(小学加减乘除答题)页;长按“确定”返回演示菜单即可访问其余外设演示。
+//
 // 按键语义(全局统一):
 //   上/下 短按   菜单中=移动选中项;演示页中=该页自定义
 //   确定  短按   菜单中=进入选中项;演示页中=该页自定义
@@ -26,8 +28,10 @@ static const demo_entry_t DEMOS[] = {
     { "Wi-Fi",   demo_wifi_enter,    demo_wifi_exit,    demo_wifi_key    },
     { "BLE",     demo_ble_enter,     demo_ble_exit,     demo_ble_key     },
     { "Low Power", demo_low_power_enter, demo_low_power_exit, demo_low_power_key },
+    { "Math",    demo_math_enter,    demo_math_exit,    demo_math_key    },
 };
-#define DEMO_COUNT (sizeof(DEMOS) / sizeof(DEMOS[0]))
+#define DEMO_COUNT    (sizeof(DEMOS) / sizeof(DEMOS[0]))
+#define DEMO_MATH_IDX (DEMO_COUNT - 1)   // 开机进入的答题页(DEMOS[] 中末项)
 
 // 各外设初始化结果:失败的项在菜单里标 [FAIL] 且不允许进入。
 static bool s_ok[DEMO_COUNT];
@@ -131,8 +135,15 @@ void app_main(void) {
     s_ok[4] = true;                                    // 页面内按需初始化并显示错误
     s_ok[5] = true;
     s_ok[6] = true;
+    s_ok[7] = true;                                    // Math:纯逻辑 + 显示,始终可用
 
-    if (bsp_lvgl_lock(1000)) { enter_menu(); bsp_lvgl_unlock(); }
+    // 开机直接进入答题页,而不是菜单;长按“确定”仍可返回菜单访问其它演示。
+    if (bsp_lvgl_lock(1000)) {
+        s_sel = DEMO_MATH_IDX;
+        s_active = DEMO_MATH_IDX;
+        DEMOS[s_active].enter();
+        bsp_lvgl_unlock();
+    }
 
     ESP_LOGI(TAG, "就绪:Display=%d Button=%d Audio=%d Battery=%d",
              s_ok[0], s_ok[1], s_ok[2], s_ok[3]);

@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- 新增开机即玩的小学口算游戏:上电即出一道两位数以内的 `+`、`-`、`x`、`/` 题并给出四个选项,上/下移动高亮、确定提交;答对显示 `CORRECT` 并等待任意按键,答错显示 `TRY AGAIN` 可重新选择,再次答错则揭示正确答案并等待按键进入下一题,如此无限循环。出题与“两次机会”状态机在带主机测试的 `main/math_quiz.c`,`main/demo_math.c` 在共用的 `ui_pixel` 主题上渲染并在右上角显示电量;长按“确定”仍可返回演示菜单。
+
 - 加入厂家为优特利 520mAh 电芯生成的 80 字节 CW2017 profile，并实现内容与更新标志检查、写入后校验、规定的重启时序以及有上限的 SOC 就绪等待。
 
 - 按功能域整理文档并采用双入口：根目录 `AGENTS.md` 变为薄路由（只保留硬约束与任务路由），详细的 AI 开发工作流下沉到 `docs/development/ai-guide.md`，`agent-guide.md` 并入其中。为 `docs/development/` 增加二级分区（`engineering/`、`ci/`、`release/`），把 `plays/` 应用档案与 `experiences/` 移入带专属 README 的 `docs/reference/` 参考区；删除 `docs/software-design/`（空脚手架）；把 `assets/{fonts,images,music}/README` 三个叶子 README 并入 `assets/` README；把 `project-completion` 的六个子文档压平为单文件；并把每个目录统一为单一 README，消除所有 `INDEX` 文件与一处重复经验索引。所有交叉引用与文献链接已更新；未丢弃任何内容。
