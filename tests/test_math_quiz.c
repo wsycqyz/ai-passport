@@ -48,10 +48,10 @@ static void test_generation(void)
         memset(&q, 0, sizeof q);
         math_quiz_generate(&q, &rng);
 
-        // 操作数与答案均在两位数以内且非负。
-        assert(in_range(q.a, 0, 99));
-        assert(in_range(q.b, 0, 99));
-        assert(in_range(q.answer, 0, 99));
+        // 操作数与答案均在三位数以内且非负。
+        assert(in_range(q.a, 0, 999));
+        assert(in_range(q.b, 0, 999));
+        assert(in_range(q.answer, 0, 999));
 
         // 运算结果正确,且符合小学约束。
         switch (q.op) {
@@ -64,12 +64,16 @@ static void test_generation(void)
             break;
         case MATH_OP_MUL:
             assert(q.answer == q.a * q.b);
-            assert(in_range(q.a, 1, 9) && in_range(q.b, 1, 9));
+            assert(q.a >= 1 && q.b >= 1);
+            assert(in_range(q.a, 1, 9) || in_range(q.b, 1, 9));  // 一个因数为一位数
+            assert(q.answer <= 999);                              // 积不超三位数
             break;
         case MATH_OP_DIV:
             assert(q.b > 0);                    // 除数非零
+            assert(in_range(q.b, 1, 9));         // 除数为一位数
             assert(q.a == q.answer * q.b);      // 整除
             assert(q.a % q.b == 0);
+            assert(q.a <= 999);                  // 被除数不超三位数
             break;
         default:
             assert(0 && "unexpected op");

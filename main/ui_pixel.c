@@ -25,6 +25,12 @@ lv_obj_t *ui_pixel_label(lv_obj_t *parent, const char *text,
     return label;
 }
 
+// 供其他 demo 页面直接绘制像素风格矩形(例如字库没有字形时手绘运算符)。
+lv_obj_t *ui_pixel_block(lv_obj_t *parent, int x, int y, int w, int h, uint32_t color)
+{
+    return block(parent, x, y, w, h, color);
+}
+
 static void add_cloud(lv_obj_t *parent, int x, int y)
 {
     block(parent, x + 1, y + 7, 43, 10, UI_INK);

@@ -6,7 +6,7 @@
 
 ## Unreleased
 
-- Added a boot-to-quiz elementary arithmetic game: on power-on the device shows a two-digit `+`, `-`, `x`, `/` problem with four answer choices, moved with UP/DOWN and confirmed with OK. A correct pick shows `CORRECT` and waits for any key, a wrong pick shows `TRY AGAIN` and lets the player re-select, and a second wrong pick reveals the answer before waiting for a key to advance, looping forever. The question generation and two-attempt state machine live in a host-tested `main/math_quiz.c`; `main/demo_math.c` renders them on the shared `ui_pixel` theme with a top-right battery readout, and long-pressing OK still returns to the demo menu.
+- Added a boot-to-quiz elementary arithmetic game: on power-on the device shows a `+`, `-`, `x`, `÷` problem (operands and answers within three digits) with four answer choices, moved with UP/DOWN and confirmed with OK. A correct pick shows `CORRECT` and waits for any key, a wrong pick shows `TRY AGAIN` and lets the player re-select, and a second wrong pick reveals the answer before waiting for a key to advance, looping forever. The question generation and two-attempt state machine live in a host-tested `main/math_quiz.c`; `main/demo_math.c` renders them on the shared `ui_pixel` theme with a top-right battery readout and a hand-drawn pixel `÷` glyph (the built-in font has no `÷`/`×` glyphs), and long-pressing OK still returns to the demo menu.
 
 - Added the supplied 80-byte CW2017 profile for the specified 520 mAh cell, including content/update-flag checks, verified writes, the required restart sequence, and bounded SOC-readiness polling.
 

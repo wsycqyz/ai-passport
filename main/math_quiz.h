@@ -1,4 +1,4 @@
-// main/math_quiz.h —— 小学两位数以内加减乘除出题与答题状态机。
+// main/math_quiz.h —— 小学三位数以内加减乘除出题与答题状态机。
 // 纯逻辑,不依赖 LVGL / ESP-IDF,便于主机测试;渲染与按键在 demo_math.c 中完成。
 #pragma once
 
@@ -52,11 +52,13 @@ typedef struct {
 void     math_rng_seed(math_rng_t *rng, uint32_t seed);
 uint32_t math_rng_next(math_rng_t *rng);
 
-// 生成一题:操作数与答案均在两位数以内(0..99)、非负;减法不出现负数;
-// 乘法用九九表(1..9);除法保证整除且除数非零。四个选项含唯一正确答案。
+// 生成一题:操作数与答案均在三位数以内(0..999)、非负;减法不出现负数;
+// 乘法、除法固定以一位数(1..9)作为另一因数/除数,保证积、被除数不超三位数;
+// 除法保证整除且除数非零。四个选项含唯一正确答案。
 void math_quiz_generate(math_question_t *q, math_rng_t *rng);
 
-// 运算符字符:'+','-','x','/'(屏幕字库仅含 ASCII,不用 × ÷)。
+// 运算符字符:'+','-','x','/'(屏幕字库仅含 ASCII,不用 × ÷;渲染层可对
+// 某个运算符做像素画替换,详见 demo_math.c)。
 char math_op_symbol(math_op_t op);
 
 typedef struct {

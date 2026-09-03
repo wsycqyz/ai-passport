@@ -59,10 +59,11 @@ static void fill_choices(math_question_t *q, math_rng_t *rng)
     int count = 0;
     set[count++] = q->answer;
 
-    // 常见误差(±1、±2、进退位等)优先,随机顺序尝试。
-#define MATH_QUIZ_OFFSET_COUNT 12
+    // 常见误差(±1、±2、进退位等)优先,随机顺序尝试;三位数还加上百位
+    // 进退位的常见误差(±99、±100、±101)。
+#define MATH_QUIZ_OFFSET_COUNT 18
     static const int offsets[MATH_QUIZ_OFFSET_COUNT] = {
-        1, -1, 2, -2, 3, -3, 10, -10, 5, -5, 11, -11,
+        1, -1, 2, -2, 3, -3, 5, -5, 10, -10, 11, -11, 99, -99, 100, -100, 101, -101,
     };
     int order[MATH_QUIZ_OFFSET_COUNT];
     for (int i = 0; i < MATH_QUIZ_OFFSET_COUNT; i++) order[i] = i;
@@ -99,25 +100,35 @@ void math_quiz_generate(math_question_t *q, math_rng_t *rng)
     q->op = (math_op_t)rng_below(rng, MATH_OP_COUNT);
     switch (q->op) {
     case MATH_OP_ADD:
-        q->a = rng_range(rng, 1, 98);
-        q->b = rng_range(rng, 1, 99 - q->a);  // 保证和不超过两位数
+        q->a = rng_range(rng, 1, 998);
+        q->b = rng_range(rng, 1, 999 - q->a);  // 保证和不超过三位数
         q->answer = q->a + q->b;
         break;
     case MATH_OP_SUB:
-        q->a = rng_range(rng, 1, 99);
+        q->a = rng_range(rng, 1, 999);
         q->b = rng_range(rng, 0, q->a);        // 保证差非负
         q->answer = q->a - q->b;
         break;
-    case MATH_OP_MUL:
-        q->a = rng_range(rng, 1, 9);           // 九九表
-        q->b = rng_range(rng, 1, 9);
+    case MATH_OP_MUL: {
+        int one_digit = rng_range(rng, 1, 9);       // 一位数因数
+        int other_max = 999 / one_digit;            // 保证积不超过三位数
+        int other = rng_range(rng, 1, other_max);
+        if (rng_below(rng, 2)) {                     // 随机决定一位数因数在前还是在后
+            q->a = one_digit;
+            q->b = other;
+        } else {
+            q->a = other;
+            q->b = one_digit;
+        }
         q->answer = q->a * q->b;
         break;
+    }
     case MATH_OP_DIV:
     default: {
-        int quotient = rng_range(rng, 1, 9);
-        q->b = rng_range(rng, 1, 9);
-        q->a = quotient * q->b;                // 由商与除数反推,保证整除
+        q->b = rng_range(rng, 1, 9);                 // 一位数除数
+        int quotient_max = 999 / q->b;               // 保证被除数不超过三位数
+        int quotient = rng_range(rng, 1, quotient_max);
+        q->a = quotient * q->b;                      // 由商与除数反推,保证整除
         q->answer = quotient;
         break;
     }
