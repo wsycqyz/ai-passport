@@ -61,11 +61,30 @@ run_static_checks() {
             -o "${test_dir}/test_demo_${demo}_runtime"
         "${test_dir}/test_demo_${demo}_runtime"
     done
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Icomponents/sonic_link/include \
+        tests/test_sonic_rs.c components/sonic_link/src/sonic_rs.c \
+        components/sonic_link/src/sonic_frame.c -o "${test_dir}/test_sonic_rs"
+    "${test_dir}/test_sonic_rs"
+    "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror -Icomponents/sonic_link/include \
+        tests/test_sonic_link.c components/sonic_link/src/sonic_rs.c \
+        components/sonic_link/src/sonic_frame.c components/sonic_link/src/sonic_rx.c \
+        components/sonic_link/src/sonic_wifi.c -lm -o "${test_dir}/test_sonic_link"
+    "${test_dir}/test_sonic_link"
+    # Cross-check: audio from the PC encoder must decode with the firmware receiver.
+    PYTHONDONTWRITEBYTECODE=1 python3 tools/sonic_link.py wifi --ssid "Cross Check" \
+        --password "p@ss word 123" --repeat 2 --wav "${test_dir}/sonic_link.wav" --no-play
+    "${test_dir}/test_sonic_link" --wav "${test_dir}/sonic_link.wav" \
+        --ssid "Cross Check" --password "p@ss word 123"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_app_flow.c main/app_flow.c main/wifi_policy.c main/app_text.c \
+        -o "${test_dir}/test_app_flow"
+    "${test_dir}/test_app_flow"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_deep_sleep_contract.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_check_repo.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_archive_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_install_passport_skills.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_sonic_link_tool.py
     rm -rf "${test_dir}"
     echo "Host tests: PASS"
 }

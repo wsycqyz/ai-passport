@@ -1,16 +1,16 @@
+# "Wi-Fi by sound" application. The baseline hardware-test pages (demo_*.c,
+# ui_pixel*, demo_navigation*) stay in this directory for the upstream host
+# tests but are not part of this firmware; demo_radio.c is reused for the
+# one-time NVS/netif/event-loop setup.
 idf_component_register(
     SRCS "main.c"
-         "demo_navigation.c"
-         "ui_pixel.c"
-         "ui_pixel_math.c"
-         "demo_display.c"
-         "demo_button.c"
-         "demo_audio.c"
-         "demo_battery.c"
+         "app_flow.c"
+         "app_text.c"
+         "app_ui.c"
+         "sonic_listener.c"
+         "wifi_link.c"
+         "wifi_policy.c"
          "demo_radio.c"
-         "demo_wifi.c"
-         "demo_ble.c"
-         "demo_low_power.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp bt esp_event esp_hw_support esp_netif esp_timer esp_wifi nvs_flash
+    REQUIRES bsp sonic_link esp_event esp_netif esp_timer esp_wifi nvs_flash
 )
