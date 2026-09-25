@@ -53,6 +53,16 @@ image resets NVS, which also clears saved Wi-Fi credentials; use
 `idf.py flash` to keep them. See
 [flashing and stored data](docs/development/engineering/firmware-layout.md#flashing-and-stored-data).
 
+To skip the build, flash the prebuilt image of this branch,
+[`firmware/FoloToy-AI-Passport-full.bin`](firmware/FoloToy-AI-Passport-full.bin)
+(built from commit `2097a58` with ESP-IDF 5.5.3, SHA-256
+`599b2efbfb3d98111b50ea9cd03c50087df89df2dc9a25ac130f320152f1c14a`). It is
+also a merged image and resets NVS:
+
+```bash
+python -m esptool --chip esp32c3 -p <PORT> -b 460800 write_flash 0x0 firmware/FoloToy-AI-Passport-full.bin
+```
+
 ### 2. Send Wi-Fi credentials from the PC
 
 Run:
