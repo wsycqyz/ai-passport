@@ -1,5 +1,6 @@
-// Host tests for the application state machine, Wi-Fi failure policy, and
-// SSID display formatting (main/app_flow.c, main/wifi_policy.c, main/app_text.c).
+// Host tests for the application state machine, retry back-off, Wi-Fi
+// failure policy, and SSID display formatting (main/app_flow.c,
+// main/wifi_policy.c, main/app_text.c).
 #include "app_flow.h"
 #include "app_text.h"
 #include "wifi_policy.h"
@@ -16,71 +17,139 @@ static int s_failures;
     } \
 } while (0)
 
-static void test_first_boot_to_success_and_save(void)
+static app_flow_t booted(bool saved)
 {
     app_flow_t f;
     app_flow_init(&f);
-    CHECK(f.state == APP_STATE_BOOT);
+    app_flow_handle(&f, saved ? APP_EVENT_BOOT_SAVED : APP_EVENT_BOOT_EMPTY);
+    return f;
+}
+
+static void test_first_boot_to_heatmap_and_save(void)
+{
+    app_flow_t f;
+    app_flow_init(&f);
+    CHECK(f.state == APP_STATE_BOOT && f.link == APP_LINK_OFF);
     CHECK(app_flow_handle(&f, APP_EVENT_BOOT_EMPTY) == APP_ACTION_RENDER);
-    CHECK(f.state == APP_STATE_SETUP && f.note == APP_NOTE_NO_SAVED);
+    CHECK(f.state == APP_STATE_SETUP && f.note == APP_NOTE_NO_SAVED && !f.have_saved);
     CHECK(app_flow_note_text(f.note) != NULL);
 
-    CHECK(app_flow_handle(&f, APP_EVENT_BUTTON) == (APP_ACTION_LISTEN_START | APP_ACTION_RENDER));
+    CHECK(app_flow_handle(&f, APP_EVENT_OK) == (APP_ACTION_LISTEN_START | APP_ACTION_RENDER));
     CHECK(f.state == APP_STATE_LISTENING && f.note == APP_NOTE_NONE);
 
     CHECK(app_flow_handle(&f, APP_EVENT_CREDENTIALS) ==
           (APP_ACTION_LISTEN_STOP | APP_ACTION_RENDER | APP_ACTION_CONNECT));
-    CHECK(f.state == APP_STATE_CONNECTING && f.source == APP_SOURCE_SOUND);
+    CHECK(f.state == APP_STATE_CONNECTING && f.source == APP_SOURCE_SOUND &&
+          f.link == APP_LINK_CONNECTING);
 
-    // New credentials are persisted only once they have connected.
+    // Once connected the main page returns, and the new credentials are saved.
     CHECK(app_flow_handle(&f, APP_EVENT_WIFI_CONNECTED) == (APP_ACTION_SAVE | APP_ACTION_RENDER));
-    CHECK(f.state == APP_STATE_CONNECTED);
+    CHECK(f.state == APP_STATE_HEATMAP && f.link == APP_LINK_UP);
 
-    CHECK(app_flow_handle(&f, APP_EVENT_BUTTON) == (APP_ACTION_WIFI_STOP | APP_ACTION_RENDER));
-    CHECK(f.state == APP_STATE_SETUP && f.note == APP_NOTE_NONE);
+    // OK opens the Wi-Fi setup page and turns the radio off.
+    CHECK(app_flow_handle(&f, APP_EVENT_OK) ==
+          (APP_ACTION_WIFI_STOP | APP_ACTION_FETCH_CANCEL | APP_ACTION_RENDER));
+    CHECK(f.state == APP_STATE_SETUP && f.link == APP_LINK_OFF && f.note == APP_NOTE_NONE);
 }
 
-static void test_saved_boot_paths(void)
+static void test_saved_boot_runs_in_background(void)
 {
     app_flow_t f;
     app_flow_init(&f);
+    // With saved credentials the main page opens at once.
     CHECK(app_flow_handle(&f, APP_EVENT_BOOT_SAVED) == (APP_ACTION_RENDER | APP_ACTION_CONNECT));
-    CHECK(f.state == APP_STATE_CONNECTING && f.source == APP_SOURCE_SAVED);
+    CHECK(f.state == APP_STATE_HEATMAP && f.have_saved && f.source == APP_SOURCE_SAVED &&
+          f.link == APP_LINK_CONNECTING);
     // Saved credentials that connect are not written again.
-    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_CONNECTED) == APP_ACTION_RENDER);
-
-    // Losing the link retries the same credentials.
-    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_LOST) == (APP_ACTION_RENDER | APP_ACTION_CONNECT));
-    CHECK(f.state == APP_STATE_CONNECTING && f.source == APP_SOURCE_RECONNECT);
-    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_CONNECTED) == APP_ACTION_RENDER);
-
-    // "Re-configure Wi-Fi" while the saved network is still connecting.
-    app_flow_init(&f);
-    app_flow_handle(&f, APP_EVENT_BOOT_SAVED);
-    CHECK(app_flow_handle(&f, APP_EVENT_BUTTON) == (APP_ACTION_WIFI_STOP | APP_ACTION_RENDER));
-    CHECK(f.state == APP_STATE_SETUP && f.note == APP_NOTE_CONNECT_STOPPED);
-    // A late Wi-Fi result must not leave the setup page.
+    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_CONNECTED) == APP_ACTION_LINK);
+    CHECK(f.state == APP_STATE_HEATMAP && f.link == APP_LINK_UP);
     CHECK(app_flow_handle(&f, APP_EVENT_WIFI_CONNECTED) == 0);
+
+    // A dropped link reconnects with the same credentials.
+    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_LOST) == (APP_ACTION_LINK | APP_ACTION_CONNECT));
+    CHECK(f.link == APP_LINK_CONNECTING && f.source == APP_SOURCE_RECONNECT);
+    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_LOST) == 0);
+
+    // A failed attempt waits, then retries; the page never changes.
+    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_FAILED) ==
+          (APP_ACTION_WIFI_STOP | APP_ACTION_RETRY_LATER | APP_ACTION_LINK));
+    CHECK(f.state == APP_STATE_HEATMAP && f.link == APP_LINK_WAITING);
     CHECK(app_flow_handle(&f, APP_EVENT_WIFI_FAILED) == 0);
+    CHECK(app_flow_handle(&f, APP_EVENT_RETRY) == (APP_ACTION_LINK | APP_ACTION_CONNECT));
+    CHECK(f.link == APP_LINK_CONNECTING && f.source == APP_SOURCE_RECONNECT);
+    CHECK(app_flow_handle(&f, APP_EVENT_RETRY) == 0);
+
+    // UP/DOWN on the main page scroll the calendar, not the flow.
+    CHECK(app_flow_handle(&f, APP_EVENT_BACK) == 0);
+    CHECK(app_flow_handle(&f, APP_EVENT_CREDENTIALS) == 0);
+    CHECK(f.state == APP_STATE_HEATMAP);
+}
+
+static void test_back_to_heatmap(void)
+{
+    // Back from every setup page; with saved credentials it reconnects.
+    app_flow_t f = booted(true);
+    app_flow_handle(&f, APP_EVENT_OK);
+    CHECK(f.state == APP_STATE_SETUP);
+    CHECK(app_flow_handle(&f, APP_EVENT_BACK) == (APP_ACTION_RENDER | APP_ACTION_CONNECT));
+    CHECK(f.state == APP_STATE_HEATMAP && f.link == APP_LINK_CONNECTING && f.source == APP_SOURCE_SAVED);
+
+    app_flow_handle(&f, APP_EVENT_OK);
+    app_flow_handle(&f, APP_EVENT_OK);
+    CHECK(f.state == APP_STATE_LISTENING);
+    CHECK(app_flow_handle(&f, APP_EVENT_BACK) ==
+          (APP_ACTION_LISTEN_STOP | APP_ACTION_RENDER | APP_ACTION_CONNECT));
+    CHECK(f.state == APP_STATE_HEATMAP);
+
+    // Leaving an attempt with new credentials returns to the saved ones.
+    app_flow_handle(&f, APP_EVENT_OK);
+    app_flow_handle(&f, APP_EVENT_OK);
+    app_flow_handle(&f, APP_EVENT_CREDENTIALS);
+    CHECK(f.state == APP_STATE_CONNECTING);
+    CHECK(app_flow_handle(&f, APP_EVENT_BACK) ==
+          (APP_ACTION_WIFI_STOP | APP_ACTION_RENDER | APP_ACTION_CONNECT));
+    CHECK(f.state == APP_STATE_HEATMAP && f.source == APP_SOURCE_SAVED);
+
+    // Without saved credentials the main page opens offline.
+    f = booted(false);
+    CHECK(app_flow_handle(&f, APP_EVENT_BACK) == APP_ACTION_RENDER);
+    CHECK(f.state == APP_STATE_HEATMAP && f.link == APP_LINK_OFF);
+    CHECK(app_flow_handle(&f, APP_EVENT_RETRY) == 0);
+    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_CONNECTED) == 0);
+    CHECK(app_flow_handle(&f, APP_EVENT_OK) ==
+          (APP_ACTION_WIFI_STOP | APP_ACTION_FETCH_CANCEL | APP_ACTION_RENDER));
     CHECK(f.state == APP_STATE_SETUP);
 }
 
 static void test_failure_loop(void)
 {
-    app_flow_t f;
-    app_flow_init(&f);
-    app_flow_handle(&f, APP_EVENT_BOOT_SAVED);
-    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_FAILED) == (APP_ACTION_WIFI_STOP | APP_ACTION_RENDER));
-    CHECK(f.state == APP_STATE_FAILED);
+    app_flow_t f = booted(false);
+    app_flow_handle(&f, APP_EVENT_OK);
+    app_flow_handle(&f, APP_EVENT_CREDENTIALS);
+    // Failed sound credentials are never saved.
+    const uint32_t actions = app_flow_handle(&f, APP_EVENT_WIFI_FAILED);
+    CHECK(actions == (APP_ACTION_WIFI_STOP | APP_ACTION_RENDER));
+    CHECK(f.state == APP_STATE_FAILED && f.link == APP_LINK_OFF);
     CHECK(app_flow_handle(&f, APP_EVENT_WIFI_LOST) == 0);
-    CHECK(app_flow_handle(&f, APP_EVENT_BUTTON) == APP_ACTION_RENDER);
+    CHECK(app_flow_handle(&f, APP_EVENT_OK) == APP_ACTION_RENDER);
     CHECK(f.state == APP_STATE_SETUP && f.note == APP_NOTE_NONE);
 
-    // Failed sound credentials are never saved.
-    app_flow_handle(&f, APP_EVENT_BUTTON);
+    app_flow_handle(&f, APP_EVENT_OK);
     app_flow_handle(&f, APP_EVENT_CREDENTIALS);
-    CHECK((app_flow_handle(&f, APP_EVENT_WIFI_FAILED) & APP_ACTION_SAVE) == 0);
-    CHECK(f.state == APP_STATE_FAILED);
+    app_flow_handle(&f, APP_EVENT_WIFI_FAILED);
+    CHECK(app_flow_handle(&f, APP_EVENT_BACK) == APP_ACTION_RENDER);
+    CHECK(f.state == APP_STATE_HEATMAP && f.link == APP_LINK_OFF);
+
+    // Stopping an attempt with OK returns to the setup page.
+    f = booted(false);
+    app_flow_handle(&f, APP_EVENT_OK);
+    app_flow_handle(&f, APP_EVENT_CREDENTIALS);
+    CHECK(app_flow_handle(&f, APP_EVENT_OK) == (APP_ACTION_WIFI_STOP | APP_ACTION_RENDER));
+    CHECK(f.state == APP_STATE_SETUP && f.note == APP_NOTE_CONNECT_STOPPED);
+    // A late Wi-Fi result must not leave the setup page.
+    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_CONNECTED) == 0);
+    CHECK(app_flow_handle(&f, APP_EVENT_WIFI_FAILED) == 0);
+    CHECK(f.state == APP_STATE_SETUP);
 }
 
 static void test_listening_exits(void)
@@ -89,28 +158,47 @@ static void test_listening_exits(void)
         app_event_t event;
         app_note_t note;
     } cases[] = {
-        { APP_EVENT_BUTTON, APP_NOTE_LISTEN_CANCELLED },
+        { APP_EVENT_OK, APP_NOTE_LISTEN_CANCELLED },
         { APP_EVENT_LISTEN_TIMEOUT, APP_NOTE_LISTEN_TIMEOUT },
         { APP_EVENT_LISTEN_FAILED, APP_NOTE_AUDIO_ERROR },
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
-        app_flow_t f;
-        app_flow_init(&f);
-        app_flow_handle(&f, APP_EVENT_BOOT_EMPTY);
-        app_flow_handle(&f, APP_EVENT_BUTTON);
+        app_flow_t f = booted(false);
+        app_flow_handle(&f, APP_EVENT_OK);
         CHECK(app_flow_handle(&f, cases[i].event) == (APP_ACTION_LISTEN_STOP | APP_ACTION_RENDER));
         CHECK(f.state == APP_STATE_SETUP && f.note == cases[i].note);
         CHECK(app_flow_note_text(f.note) != NULL);
     }
-    app_flow_t f;
-    app_flow_init(&f);
-    app_flow_handle(&f, APP_EVENT_BOOT_EMPTY);
-    app_flow_handle(&f, APP_EVENT_BUTTON);
+    app_flow_t f = booted(false);
+    app_flow_handle(&f, APP_EVENT_OK);
     // Stale Wi-Fi events while listening are ignored.
     CHECK(app_flow_handle(&f, APP_EVENT_WIFI_CONNECTED) == 0);
     CHECK(app_flow_handle(&f, APP_EVENT_WIFI_LOST) == 0);
+    CHECK(app_flow_handle(&f, APP_EVENT_RETRY) == 0);
     CHECK(f.state == APP_STATE_LISTENING);
     CHECK(app_flow_note_text(APP_NOTE_NONE) == NULL);
+}
+
+static void test_retry_delay(void)
+{
+    CHECK(app_retry_delay_ms(15000, 300000, 0) == 15000);
+    CHECK(app_retry_delay_ms(15000, 300000, 1) == 15000);
+    CHECK(app_retry_delay_ms(15000, 300000, 2) == 30000);
+    CHECK(app_retry_delay_ms(15000, 300000, 5) == 240000);
+    CHECK(app_retry_delay_ms(15000, 300000, 6) == 300000);
+    CHECK(app_retry_delay_ms(15000, 300000, 255) == 300000);
+    CHECK(app_retry_delay_ms(30000, 600000, 3) == 120000);
+    CHECK(app_retry_delay_ms(4000000000u, 4100000000u, 9) == 4100000000u);
+    CHECK(app_retry_delay_ms(500, 100, 1) == 100);
+
+    // History restored from flash is refreshed once per power-on, even though
+    // the boot clock restarts at 0; after that every period.
+    const int64_t period = 30LL * 60 * 1000000;
+    CHECK(app_refresh_due(false, 0, 0, period));
+    CHECK(app_refresh_due(false, 5 * 60 * 1000000LL, 0, period));
+    CHECK(!app_refresh_due(true, period - 1, 0, period));
+    CHECK(app_refresh_due(true, period, 0, period));
+    CHECK(!app_refresh_due(true, 2 * period - 1, period, period));
 }
 
 static void test_policy(void)
@@ -168,10 +256,12 @@ static void test_ssid_text(void)
 
 int main(void)
 {
-    test_first_boot_to_success_and_save();
-    test_saved_boot_paths();
+    test_first_boot_to_heatmap_and_save();
+    test_saved_boot_runs_in_background();
+    test_back_to_heatmap();
     test_failure_loop();
     test_listening_exits();
+    test_retry_delay();
     test_policy();
     test_ssid_text();
     if (s_failures) {

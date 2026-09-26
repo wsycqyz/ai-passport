@@ -3,10 +3,12 @@
 #include "bsp_button.h"
 #include "bsp_pins.h"
 #include "iot_button.h"
+#include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
 #include "esp_timer.h"
 
 static const char *TAG = "bsp_btn";
@@ -209,4 +211,44 @@ int bsp_button_read_mv(void) {
     if (adc_oneshot_read(s_adc, BSP_BTN_ADC_CHANNEL, &raw) != ESP_OK) return -1;
     if (adc_cali_raw_to_voltage(s_cali, raw, &mv) != ESP_OK) return -1;
     return mv;
+}
+
+esp_err_t bsp_button_prepare_deep_sleep(void) {
+    // Stop polling first: iot_button_delete() takes no lock while the polling
+    // timer walks the same button list from the higher-priority esp_timer task.
+    if (s_ready) (void)iot_button_stop();
+    button_cleanup();
+    // A driver or ADC unit that could not be released still owns the pad.
+    if (s_adc || s_cali) return ESP_ERR_INVALID_STATE;
+    for (int i = 0; i < BSP_BTN_COUNT; i++) {
+        if (s_btn[i]) return ESP_ERR_INVALID_STATE;
+    }
+    // The board's external 10 kΩ pull-up keeps the pad high while no key is
+    // pressed; ESP-IDF adds the internal pull-up for a low-level wake during
+    // sleep (CONFIG_ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS).
+    const gpio_config_t io = {
+        .pin_bit_mask = 1ULL << BSP_BTN_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    esp_err_t err = gpio_config(&io);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "GPIO%d 数字输入配置失败: %s", BSP_BTN_GPIO, esp_err_to_name(err));
+        return err;
+    }
+    if (gpio_get_level(BSP_BTN_GPIO) == 0) {
+        ESP_LOGW(TAG, "按键仍被按住，不能进入 deep sleep");
+        return ESP_ERR_INVALID_STATE;
+    }
+    // The first argument is a pin mask; a bare GPIO number 0 would arm nothing.
+    err = esp_deep_sleep_enable_gpio_wakeup(1ULL << BSP_BTN_GPIO, ESP_GPIO_WAKEUP_GPIO_LOW);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "GPIO%d 唤醒源配置失败: %s", BSP_BTN_GPIO, esp_err_to_name(err));
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
+        return err;
+    }
+    ESP_LOGI(TAG, "按键唤醒已就绪:GPIO%d 低电平", BSP_BTN_GPIO);
+    return ESP_OK;
 }

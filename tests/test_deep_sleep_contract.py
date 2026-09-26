@@ -153,6 +153,39 @@ class DeepSleepContractTest(unittest.TestCase):
         self.assertLess(body.index("bsp_lvgl_lock(1000)"),
                         body.index("bsp_display_prepare_deep_sleep()"))
 
+    def test_application_idle_power_off_follows_the_same_order(self) -> None:
+        # The heatmap app's idle power-off: radio off, key wake armed (or
+        # restart), then the same terminal order as the Low Power demo.
+        body = function_body(read("main/main.c"), "power_off")
+        calls = [
+            "wifi_link_stop()",
+            "bsp_button_prepare_deep_sleep()",
+            "bsp_battery_sleep()",
+            "bsp_audio_sleep()",
+            "bsp_audio_prepare_deep_sleep()",
+            "bsp_i2c_prepare_deep_sleep()",
+            "bsp_lvgl_lock(1000)",
+            "bsp_display_prepare_deep_sleep()",
+            "esp_deep_sleep_start()",
+        ]
+        positions = [body.index(call) for call in calls]
+        self.assertEqual(positions, sorted(positions))
+        wake = body.index("bsp_button_prepare_deep_sleep()")
+        self.assertLess(body.index("esp_restart()", wake), body.index("bsp_battery_sleep()"))
+
+    def test_button_wake_releases_the_adc_before_arming(self) -> None:
+        button = read("components/bsp/src/bsp_button.c")
+        body = function_body(button, "bsp_button_prepare_deep_sleep")
+        order = [
+            "iot_button_stop()",
+            "button_cleanup()",
+            "gpio_config(&io)",
+            "gpio_get_level(BSP_BTN_GPIO)",
+            "esp_deep_sleep_enable_gpio_wakeup(1ULL << BSP_BTN_GPIO, ESP_GPIO_WAKEUP_GPIO_LOW)",
+        ]
+        positions = [body.index(call) for call in order]
+        self.assertEqual(positions, sorted(positions))
+
 
 if __name__ == "__main__":
     unittest.main()

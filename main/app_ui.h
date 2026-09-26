@@ -1,9 +1,12 @@
-// main/app_ui.h —— Screens of the "Wi-Fi by sound" application.
+// main/app_ui.h —— Wi-Fi setup screens of the heatmap app (the "Wi-Fi by
+// sound" module).
 //
-// One persistent LVGL screen: a header (app name + battery), a content area
-// rebuilt for each page, and a single on-screen button activated by the OK key.
-// Every function takes the LVGL lock itself, so the controller task may call
-// them directly; none may be called from button callbacks.
+// One persistent LVGL screen, separate from the heatmap screen: a header (module
+// name + battery), a content area rebuilt for each page, a single on-screen
+// button activated by the OK key, and a hint that UP or DOWN returns to the
+// heatmap. Showing any page makes this screen active. Every function takes the
+// LVGL lock itself, so the controller task may call them directly; none may be
+// called from button callbacks.
 #pragma once
 
 #include <stdbool.h>
@@ -18,19 +21,8 @@ typedef struct {
     int seconds_left;       // listening timeout countdown; < 0 hides it
 } app_ui_listening_t;
 
-typedef struct {
-    const char *ssid;
-    const char *ip;
-    const char *netmask;
-    const char *gateway;
-    const char *dns;
-    int rssi;               // dBm; 0 when unknown
-    int channel;
-    const char *footnote;   // optional line under the table
-    bool footnote_warning;
-} app_ui_connected_t;
-
-// Create and load the screen. Call once after bsp_lvgl_init().
+// Create the screen (it is loaded by the first page shown). Call once after
+// bsp_lvgl_init().
 bool app_ui_init(void);
 
 void app_ui_show_connecting(const char *ssid);
@@ -40,9 +32,6 @@ void app_ui_show_setup(const char *note);
 
 void app_ui_show_listening(void);
 void app_ui_set_listening(const app_ui_listening_t *state);
-
-void app_ui_show_connected(const app_ui_connected_t *info);
-void app_ui_set_signal(int rssi, int channel);
 
 void app_ui_show_failed(const char *title, const char *hint, const char *detail);
 

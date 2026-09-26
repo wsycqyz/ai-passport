@@ -31,3 +31,17 @@ esp_err_t bsp_button_init(bsp_btn_cb_t cb, void *user);
 // ★ 换了分压/上拉阻值后,用它测出自己的三档电压,再改 bsp_pins.h 的 BSP_BTN_MV_TABLE。
 // 读取失败返回 -1。
 int bsp_button_read_mv(void);
+
+// Deep-sleep key wake: stop the button driver, release its ADC unit, return
+// BSP_BTN_GPIO to a digital input and arm it as a low-level deep-sleep wake
+// source. Any of the three keys pulls the pad low, so any key wakes the chip.
+// While the ADC owns the pad its digital level reads 0, which is why the ADC
+// must be released first (otherwise the wake fires at sleep entry).
+//
+// Call from the task that owns the keys, right before esp_deep_sleep_start().
+// Key events stop; bsp_button_init() restores them if sleep is abandoned
+// (also call esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO)).
+// Returns ESP_ERR_INVALID_STATE when a key is held (the wake would fire at
+// once) or the driver could not be released; otherwise the failing step's
+// error. The wake source is armed only when ESP_OK is returned.
+esp_err_t bsp_button_prepare_deep_sleep(void);

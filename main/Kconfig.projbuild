@@ -1,0 +1,11 @@
+menu "GitHub contribution heatmap"
+
+    config HEATMAP_GITHUB_USER
+        string "GitHub user name"
+        default "wsycqyz"
+        help
+            Public GitHub account whose contribution calendar the main page
+            shows. Letters, digits and '-' only; no token is needed because
+            the calendar is public.
+
+endmenu

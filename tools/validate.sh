@@ -79,6 +79,14 @@ run_static_checks() {
         tests/test_app_flow.c main/app_flow.c main/wifi_policy.c main/app_text.c \
         -o "${test_dir}/test_app_flow"
     "${test_dir}/test_app_flow"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_heatmap.c main/hm_calendar.c main/gh_parse.c main/hm_store.c main/hm_view.c \
+        -o "${test_dir}/test_heatmap"
+    "${test_dir}/test_heatmap"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Itests/nvs_stubs -Imain \
+        tests/test_hm_nvs.c main/hm_nvs.c main/hm_store.c main/gh_parse.c main/hm_calendar.c \
+        -o "${test_dir}/test_hm_nvs"
+    "${test_dir}/test_hm_nvs"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_deep_sleep_contract.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_check_repo.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py

@@ -1,6 +1,6 @@
 // main/app_ui.c —— see app_ui.h. Dark "signal" theme drawn with LVGL
-// primitives (arcs, lines, bars); only the built-in Montserrat 14/20 fonts are
-// used, so all text is printable ASCII (dynamic SSIDs are sanitised by the
+// primitives (arcs, lines, bars); only the built-in Montserrat 12/14/20 fonts
+// are used, so all text is printable ASCII (dynamic SSIDs are sanitised by the
 // caller with app_text_ssid()).
 #include "app_ui.h"
 
@@ -29,8 +29,9 @@
 
 // Layout of the 240x320 portrait screen (corners are masked with a 30 px radius).
 #define CONTENT_Y   40
-#define CONTENT_H   212
-#define BUTTON_Y    258
+#define CONTENT_H   206
+#define BUTTON_Y    250
+#define HINT_Y      296         // "UP / DOWN: back to heatmap" under the button
 #define ICON_CY     48          // icon centre inside the content area
 #define TITLE_Y     98
 #define TEXT_W      212
@@ -43,7 +44,6 @@ typedef enum {
     PAGE_CONNECTING,
     PAGE_SETUP,
     PAGE_LISTENING,
-    PAGE_CONNECTED,
     PAGE_FAILED,
 } page_t;
 
@@ -60,11 +60,9 @@ static lv_obj_t *s_title;
 static lv_obj_t *s_detail;
 static lv_obj_t *s_bar;
 static lv_obj_t *s_countdown;
-static lv_obj_t *s_signal;
 static lv_obj_t *s_levels[LEVEL_BARS];
 static uint8_t s_history[LEVEL_HISTORY];
 
-static const lv_point_precise_t CHECK_POINTS[] = { { 13, 25 }, { 21, 33 }, { 35, 16 } };
 static const lv_point_precise_t CROSS_A[] = { { 22, 22 }, { 42, 42 } };
 static const lv_point_precise_t CROSS_B[] = { { 42, 22 }, { 22, 42 } };
 
@@ -144,12 +142,14 @@ static lv_obj_t *progress_bar(int y)
 
 static void begin_page(page_t page, const char *button)
 {
+    // The heatmap has its own screen; every setup page brings this one back.
+    if (lv_screen_active() != s_screen) lv_screen_load(s_screen);
     lv_obj_clean(s_content);
     memset(s_arcs, 0, sizeof(s_arcs));
     memset(s_levels, 0, sizeof(s_levels));
     memset(s_history, 0, sizeof(s_history));
     s_arc_step = 0;
-    s_title = s_detail = s_bar = s_countdown = s_signal = NULL;
+    s_title = s_detail = s_bar = s_countdown = NULL;
     s_page = page;
     lv_label_set_text(s_button_label, button);
 }
@@ -227,11 +227,11 @@ bool app_ui_init(void)
     s_button_label = text(button, &lv_font_montserrat_14, C_ON_ACCENT, "");
     lv_obj_align(s_button_label, LV_ALIGN_CENTER, 19, 0);
 
-    begin_page(PAGE_NONE, "Please wait");
-    centred(TITLE_Y, TEXT_W, &lv_font_montserrat_20, C_TEXT, "Starting...", LV_LABEL_LONG_MODE_CLIP);
+    lv_obj_t *hint = text(s_screen, &lv_font_montserrat_12, C_MUTED, "UP / DOWN: back to heatmap");
+    lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, HINT_Y);
 
+    s_page = PAGE_NONE;
     lv_timer_create(animate, 280, NULL);
-    lv_screen_load(s_screen);
     bsp_lvgl_unlock();
     return true;
 }
@@ -342,58 +342,6 @@ void app_ui_set_listening(const app_ui_listening_t *state)
     char countdown[24] = "";
     if (state->seconds_left >= 0) snprintf(countdown, sizeof(countdown), "Stops in %d s", state->seconds_left);
     set_text(s_countdown, countdown);
-    bsp_lvgl_unlock();
-}
-
-static void format_signal(char *out, size_t cap, int rssi, int channel)
-{
-    if (rssi == 0) {
-        snprintf(out, cap, "-");
-    } else {
-        snprintf(out, cap, "%d dBm, ch %d", rssi, channel);
-    }
-}
-
-void app_ui_show_connected(const app_ui_connected_t *info)
-{
-    if (!bsp_lvgl_lock(SHOW_LOCK_MS)) return;
-    begin_page(PAGE_CONNECTED, "Re-configure Wi-Fi");
-    lv_obj_t *badge = disc(s_content, 120, 28, 48, C_OK);
-    stroke(badge, CHECK_POINTS, 3, 5);
-    s_title = centred(58, TEXT_W, &lv_font_montserrat_20, C_TEXT, "Connected", LV_LABEL_LONG_MODE_CLIP);
-
-    char signal[32];
-    format_signal(signal, sizeof(signal), info->rssi, info->channel);
-    const char *keys[6] = { "Wi-Fi", "IP", "Mask", "Gateway", "DNS", "Signal" };
-    const char *values[6] = { info->ssid, info->ip, info->netmask, info->gateway, info->dns, signal };
-    const int row_h = 17;
-    const int top = 90;
-    for (int i = 0; i < 6; i++) {
-        lv_obj_t *key = text(s_content, &lv_font_montserrat_14, C_MUTED, keys[i]);
-        lv_obj_set_width(key, 70);
-        lv_obj_set_style_text_align(key, LV_TEXT_ALIGN_RIGHT, 0);
-        lv_obj_set_pos(key, 10, top + i * row_h);
-        lv_obj_t *value = text(s_content, &lv_font_montserrat_14, C_TEXT, values[i]);
-        lv_label_set_long_mode(value, LV_LABEL_LONG_MODE_DOTS);
-        lv_obj_set_size(value, 138, lv_font_get_line_height(&lv_font_montserrat_14));
-        lv_obj_set_pos(value, 90, top + i * row_h);
-        if (i == 5) s_signal = value;
-    }
-    if (info->footnote) {
-        centred(top + 6 * row_h + 4, TEXT_W, &lv_font_montserrat_14,
-                info->footnote_warning ? C_WARN : C_OK, info->footnote, LV_LABEL_LONG_MODE_DOTS);
-    }
-    bsp_lvgl_unlock();
-}
-
-void app_ui_set_signal(int rssi, int channel)
-{
-    if (!bsp_lvgl_lock(UPDATE_LOCK_MS)) return;
-    if (s_page == PAGE_CONNECTED && s_signal) {
-        char signal[32];
-        format_signal(signal, sizeof(signal), rssi, channel);
-        set_text(s_signal, signal);
-    }
     bsp_lvgl_unlock();
 }
 

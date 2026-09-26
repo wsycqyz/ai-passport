@@ -2,37 +2,95 @@
   <strong>简体中文</strong> · <a href="README.md">English</a>
 </p>
 
-# AI Passport：声波配网
+# AI Passport：GitHub 贡献热力图
 
-这是 FoloToy AI Passport（ESP32-C3）的 `feature/connect-wifi-by-sound` 固件：
-设备连接 Wi-Fi，并通过电脑播放的声音接收新的 Wi-Fi 凭证。声波传输层 SonicLink
-是可在后续项目中复用的组件。上游 AI Passport 文档见 [docs/README.zh_CN.md](docs/README.zh_CN.md)。
+这是 FoloToy AI Passport（ESP32-C3）的 `feature/display-github-contribution-heatmap`
+固件：显示 [`wsycqyz`](https://github.com/wsycqyz) 的 GitHub 贡献日历，即由小方块
+组成的网格，每个方块代表一天，颜色深浅表示当天的贡献量。Wi-Fi 通过
+`feature/connect-wifi-by-sound` 分支的声波配网模块设置。上游 AI Passport 文档见
+[docs/README.zh_CN.md](docs/README.zh_CN.md)。
 
 ## 行为
 
-1. 上电时如果已保存凭证，设备立即用它连接。页面显示连接进度和
-   **Re-configure Wi-Fi** 按钮。
-2. 没有保存的凭证时，设备打开 **Set up Wi-Fi** 页面。
-3. **Start listening** 打开麦克风；电脑播放配网声音。
-4. 收到有效凭证后，设备开始连接并显示进度。
-5. 成功时显示 IP 配置和 **Re-configure Wi-Fi**。新凭证只有在连接成功后才会保存，
-   输错的密码永远不会覆盖可用的凭证。
-6. 失败时显示可能的原因，原因无法确定时显示 **Error**，并提供
-   **Re-configure Wi-Fi**。
-7. 整个流程循环进行。连接断开后会用同一组凭证重新连接。
+1. 上电时如果没有保存的 Wi-Fi，打开 **Set up Wi-Fi** 页面。
+2. 如果已保存 Wi-Fi，无论网络能否连上，都立即打开主页面；设备在后台连接，
+   连上后下载贡献日历。
+3. 主页面显示 13 周。**UP** 显示更早的周，**DOWN** 显示更新的周，每按一次移动
+   13 周。
+4. **OK** 打开声波配网模块的 Wi-Fi 设置页面。新凭证连接成功后，设备保存凭证并
+   返回主页面。在任何设置页面按 **UP** 或 **DOWN** 也会返回，且不做任何更改。
+5. 没有数据（尚未下载过）时，主页面显示 **No data** 及原因：Wi-Fi 未设置、
+   正在连接、未连接或无法访问 GitHub。已下载的数据在 Wi-Fi 断开后仍保留在屏幕上，
+   状态圆点变为红色。
+6. 下载过的历史数据保存在闪存中。开机后热力图立即显示，离线时也一样。联网后只重新
+   下载滚动的最近一年（以加入新的贡献）；更早的年份不会重复下载。
+7. 10 分钟没有按键时设备关机。按任意键（UP、DOWN 或 OK）重新开机，并按第 2 步启动。
 
-## 页面与操作
+后台连接失败后 15 s 重试，间隔逐次加倍，最长 5 min；连接断开时立即重新连接。
 
-每个页面只有一个屏幕按钮，用 **OK** 键触发。在等待用户操作的页面上 60 s 无输入
-时背光变暗；变暗后的第一次按键只会唤醒屏幕。右上角显示电池电量。
+## 主页面
 
-| 页面 | 显示内容 | OK 按钮 |
+```text
+        ■ ■ ■ ■ ■ ■ ■      每行是一周，从周日到周六；
+   Jul  ■ ■ ■ ■ ■ ■ ■      最新的一周在最下面一行，
+  2026  ■ ■ ■ ■ ■ ■ ■      今天是这一行的最后一个方块
+        ...
+   Sep  ■ ■ ■ ■ ■ ■ ■
+        ■ ■ ■ ■ ■ ■
+  ●          Less ■ ■ ■ ■ ■ More
+```
+
+- 屏幕顶部不绘制任何内容，也不显示电池电量。
+- 与 GitHub 相同，月份名称标在左侧留白中该月第一个周日所在的行。页面上的第一个
+  标签和每个一月还会显示年份。
+- 左下角：在线圆点，已连接为绿色，未连接为红色。
+- 右下角：图例，从 **Less** 到 **More** 的 GitHub 五个等级。
+- 只有边框、没有填充的方块表示仍在下载的较早日期。
+- 60 s 没有按键时背光变暗，页面回到当前的几周。变暗后的第一次按键只会唤醒屏幕。
+  10 分钟后设备关机。
+
+| 按键 | 主页面 | Wi-Fi 设置页面 |
 | --- | --- | --- |
-| Connecting | SSID、阶段（启动、加入、获取 IP）、重试次数、进度条 | Re-configure Wi-Fi |
-| Set up Wi-Fi | 操作说明，以及进入此页的原因（如有） | Start listening |
-| Listening | 实时麦克风音量、接收进度、提示、90 s 倒计时 | Cancel |
-| Connected | SSID、IP、掩码、网关、DNS、信号与信道 | Re-configure Wi-Fi |
-| Connection failed | 原因、建议、SSID 和 ESP-IDF 原因码 | Re-configure Wi-Fi |
+| UP | 向前 13 周 | 返回主页面 |
+| DOWN | 向后 13 周 | 返回主页面 |
+| OK | 打开 Wi-Fi 设置 | 页面上的按钮 |
+
+### 一屏能显示多长的历史
+
+240 × 320 px 的屏幕约为 31 × 41 mm（每像素 0.13 mm）。GitHub 日历是 53 周 × 7 天。
+把 53 周全部放进 320 px 的高度，方块只剩 4 px（0.5 mm），无法辨认。把一年折成
+几段排列时方块约为 10 px；最终采用的布局是每周一行，方块 17 px（2.2 mm），间隔
+3 px：13 行、每行 20 px，每页一个季度（91 天）。滚动的最近一年约占四页。继续
+向前翻页时按需下载更早的日历年，并提前一页下载。历史在第一个完全没有贡献的
+日历年之后的那一年截止，最多回溯 10 年。
+
+## 贡献数据
+
+设备复用 Jonathan Gruber 的 [github-contributions-api](https://github.com/grubersjoe/github-contributions-api)
+（MIT 许可），它也是 [react-github-calendar](https://github.com/grubersjoe/react-github-calendar)
+背后的服务。它抓取 GitHub 的公开日历，每年返回约 15 KB 的 JSON：
+
+```text
+https://github-contributions-api.jogruber.de/v4/wsycqyz?y=last   # 滚动的最近一年
+https://github-contributions-api.jogruber.de/v4/wsycqyz?y=2025   # 某个日历年
+```
+
+该服务失败时，设备直接读取 GitHub 自己的日历页面
+（`https://github.com/users/wsycqyz/contributions`，约 230 KB 的 HTML），这也是
+[Exploser/Github-Calendar-Scrapper](https://github.com/Exploser/Github-Calendar-Scrapper)
+等 ESP32/ESP8266 显示项目的做法。两种响应都在接收时流式解析，不会整体保存在 RAM 中。
+等级沿用 GitHub 自己的计算结果。日历是公开的，因此不需要令牌。
+
+Wi-Fi 连接后以及之后每 30 分钟下载一次滚动的最近一年；该 API 最多缓存一小时。
+下载失败后 30 s 重试，间隔逐次加倍，最长 10 分钟。
+
+所有下载的数据都保存在 NVS（命名空间 `heatmap`）中：滚动的最近一年只在内容变化时
+重写，每个较早的年份只写一次。开机时在绘制第一个页面之前载入。更换 GitHub 用户会
+丢弃已保存的历史，超出 10 年范围的年份会被删除，因此 24 KB 的 NVS 分区不会被写满。
+烧录合并镜像会连同已保存的 Wi-Fi 一起清除这些历史。
+
+如需显示其他账号，在 `idf.py menuconfig` 中修改 **GitHub contribution heatmap →
+GitHub user name**（`CONFIG_HEATMAP_GITHUB_USER`）。
 
 ## 快速开始
 
@@ -49,29 +107,18 @@ ESP-IDF 5.5.3：
 也就会清除保存的 Wi-Fi 凭证；如需保留，请使用 `idf.py flash`。参见
 [烧录与已存数据](docs/development/engineering/firmware-layout.zh_CN.md#烧录与已存数据)。
 
-如不想自行构建，可以烧录本分支的预构建镜像
-[`firmware/FoloToy-AI-Passport-full.bin`](firmware/FoloToy-AI-Passport-full.bin)
-（由提交 `2097a58` 使用 ESP-IDF 5.5.3 构建，SHA-256
-`599b2efbfb3d98111b50ea9cd03c50087df89df2dc9a25ac130f320152f1c14a`）。它同样是
-合并镜像，会重置 NVS：
-
-```bash
-python -m esptool --chip esp32c3 -p <PORT> -b 460800 write_flash 0x0 firmware/FoloToy-AI-Passport-full.bin
-```
-
 ### 2. 从电脑发送 Wi-Fi 凭证
 
-运行：
+在设备主页面按 **OK**，再按一次 **OK**（**Start listening**）。在电脑上运行：
 
 ```bash
 python tools/sonic_link.py wifi --ssid "MyHome"
 ```
 
-密码会以不回显的方式提示输入。工具提示时，先在设备上按 **OK**
-（**Start listening**），再在电脑上按回车播放声音。把设备放在距扬声器 10-50 cm
-处，音量适中。工具会播放三遍帧；常见长度的凭证每遍约 5 s。只需要 Python 3
-标准库。播放在 Windows 上使用 `winsound`，在 macOS 上使用 `afplay`，在 Linux 上
-使用 `paplay`、`pw-play`、`aplay` 或 `ffplay`。
+密码会以不回显的方式提示输入；在电脑上按回车播放声音。把设备放在距扬声器
+10-50 cm 处，音量适中。工具会播放三遍帧；常见长度的凭证每遍约 5 s。只需要
+Python 3 标准库。播放在 Windows 上使用 `winsound`，在 macOS 上使用 `afplay`，
+在 Linux 上使用 `paplay`、`pw-play`、`aplay` 或 `ffplay`。
 
 | 选项 | 含义 |
 | --- | --- |
@@ -86,9 +133,13 @@ python tools/sonic_link.py wifi --ssid "MyHome"
 | `--rate HZ` | WAV 采样率：16000、44100 或 48000（默认 48000） |
 | `--parity N` | Reed-Solomon 校验字节数，偶数，4..64（默认自动） |
 
-## 失败原因
+设置页面包括 **Set up Wi-Fi**（**Start listening**）、**Listening**（麦克风音量、
+接收进度、90 s 倒计时；**Cancel**）、**Connecting**（阶段与重试次数；
+**Re-configure Wi-Fi**）和 **Connection failed**（**Re-configure Wi-Fi**），并在
+右上角显示电池电量。新凭证只有在连接成功后才会保存，输错的密码永远不会覆盖可用的
+凭证。协议规范见 [docs/assets/sonic-link-protocol.zh_CN.md](docs/assets/sonic-link-protocol.zh_CN.md)。
 
-| 显示的标题 | 常见原因 | ESP-IDF 原因码 |
+| 显示的失败 | 常见原因 | ESP-IDF 原因码 |
 | --- | --- | --- |
 | Network not found | 名称错误、超出范围、仅 5 GHz 的网络 | 200、201、212 |
 | Wrong password | 密码错误 | 14、15、202、204 |
@@ -101,41 +152,50 @@ python tools/sonic_link.py wifi --ssid "MyHome"
 | Wi-Fi error | 无线电无法启动 | - |
 | Error | 其他任何原因；会显示原因码 | 其他 |
 
-密码错误和找不到网络会尝试两次，不支持的安全方式、无效密码和无线电错误只尝试
-一次，其他情况尝试三次。60 s 之后不再开始新的尝试。
-
 ## 架构
 
 | 路径 | 职责 |
 | --- | --- |
-| `components/sonic_link/` | 纯 C 的 SonicLink 接收端、帧构建、Reed-Solomon 编解码、CRC、Wi-Fi 负载编解码 |
-| `main/sonic_listener.c` | 音频工作任务：唤醒 ES8311、向接收端送数据、投递事件 |
-| `main/wifi_link.c` | STA 连接管理：尝试、超时、成功后写入 NVS |
-| `main/wifi_policy.c` | 失败分类、重试次数、用户提示 |
-| `main/app_flow.c` | 页面状态机 |
-| `main/app_ui.c` | 应用界面 |
-| `main/app_text.c` | 为内置字体格式化 SSID |
-| `main/main.c` | 启动流程与控制任务 |
-| `tools/sonic_link.py` | 电脑端编码器 |
+| `main/gh_fetch.c` | 下载工作任务：使用证书包的 HTTPS，先请求 API、再请求 GitHub 页面，流式解析，可取消 |
+| `main/gh_parse.c` | JSON 与 HTML 两种格式的流式提取器；固定的 372 天窗口 |
+| `main/hm_store.c` | 滚动的最近一年加最多 10 个日历年；历史范围；下一个要下载的年份；闪存编码 |
+| `main/hm_nvs.c` | NVS 中的历史数据：开机恢复、下载后保存、删除过旧年份 |
+| `main/hm_view.c` | 13 周的页面：翻页、方块状态、月份与年份标签 |
+| `main/hm_calendar.c` | 以 1970 年以来的天数表示日期，一周从周日开始 |
+| `main/hm_ui.c` | 主页面：由一个绘制回调画出的日历、状态圆点、图例、No data |
+| `main/app_flow.c` | 页面与后台连接的状态机 |
+| `main/main.c` | 启动流程、控制任务、下载调度、空闲关机 |
+| `components/bsp/src/bsp_button.c` | `bsp_button_prepare_deep_sleep()`：把 GPIO0 从 ADC 释放并设为按键唤醒源 |
+| `main/app_ui.c`、`main/sonic_listener.c`、`main/wifi_link.c`、`main/wifi_policy.c`、`main/app_text.c`、`components/sonic_link/`、`tools/sonic_link.py` | 声波配网模块 |
 
-按键回调、Wi-Fi 事件、超时定时器和音频工作任务只投递消息；唯一的控制任务负责
-状态机、Wi-Fi、监听器生命周期，并在 LVGL 锁内更新界面。配网和监听时 Wi-Fi 射频
-关闭，编解码器只在监听时唤醒，蓝牙已禁用。基线硬件测试页面（`main/demo_*.c`、
-`ui_pixel*`）为上游主机测试保留，但不会编译进本固件。
+按键回调、Wi-Fi 事件、超时定时器、音频工作任务和下载工作任务只投递消息。唯一的
+控制任务负责状态机、Wi-Fi、监听器、贡献数据，并在 LVGL 锁内更新所有界面。日历根据
+页面数据的副本绘制，不为每个方块创建 LVGL 对象，以控制在 24 KB 的 LVGL 内存池内。
+在设置页面上，除尝试新凭证外 Wi-Fi 射频保持关闭；蓝牙已禁用。基线硬件测试页面
+（`main/demo_*.c`、`ui_pixel*`）为上游主机测试保留，但不会编译进本固件。
 
 ## 测试
 
-`./tools/validate.sh --static` 还会运行 Reed-Solomon 测试、接收端信道仿真、
-Python 编码器生成的 WAV 能被 C 接收端解码的交叉检查、状态机测试和编码器测试。
+除已有的 SonicLink 与仓库检查外，`./tools/validate.sh --static` 还运行
+`tests/test_heatmap.c`（日期运算、在随机位置切分的合成 JSON 与 HTML 上的解析器、
+数据存储、闪存编码和页面模型）和 `tests/test_app_flow.c`（所有页面与连接状态的转换）。
+`tests/test_bsp_button.c` 覆盖按键唤醒的准备，`tests/test_deep_sleep_contract.py`
+检查空闲关机遵循 BSP 的关闭顺序。
 
-## 限制与安全
+## 关机
 
-- 声音不加密也不认证：录下声音的人可以还原密码或重放。只在私密环境中发送凭证。
-- 支持 2.4 GHz 网络，安全方式为 WPA、WPA2、WPA3 个人版、WEP 或无加密；
-  不支持企业级网络。
-- 内置字体只覆盖 ASCII，SSID 中的非 ASCII 字符显示为 `?`；连接时仍使用准确的
-  SSID 字节。
-- 凭证以未加密方式存储在 NVS 命名空间 `sonic_wifi` 中。
-- 协议余量来自主机仿真；扬声器、房间和麦克风仍需在设备上验证。
+固件无法断开电池，只有硬件电源键可以。因此“关机”是一次深度睡眠，其余部分按 BSP
+的顺序全部关闭：Wi-Fi 关闭、电量计休眠、音频编解码器挂起并释放其引脚、释放共享 I2C、
+显示屏关闭并进入 Sleep In、背光熄灭。三个按键共用 GPIO0，因此按键分压电路从 ADC
+切换为数字输入，并设为低电平唤醒：按任意键设备都会像开机一样重新启动。如果此时有键
+被按住，设备会改为重启而不是睡眠，因为唤醒会立即触发。这种睡眠的待机电流尚未测量。
 
-完整协议见 [docs/assets/sonic-link-protocol.zh_CN.md](docs/assets/sonic-link-protocol.zh_CN.md)。
+## 限制
+
+- 日期以 GitHub 公开日历为准，它使用 UTC；在澳大利亚上午提交的贡献可能显示在前一天。
+- 开机后在 Wi-Fi 连上之前，设备显示的是上次下载时的历史；设备没有自己的时钟。
+- 主页面依赖第三方 API 或 GitHub 日历页面的结构；两者都变化或都无法访问时显示
+  **No data**。
+- 两个服务都能看到设备的 IP 地址以及它查询的用户名。
+- 声波配网的限制同样适用：声音不加密；只支持 2.4 GHz 个人版网络；凭证以未加密方式
+  存储在 NVS 命名空间 `sonic_wifi` 中。

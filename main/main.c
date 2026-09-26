@@ -1,18 +1,29 @@
-// main/main.c —— "Wi-Fi by sound": connect to saved Wi-Fi, or receive new
-// credentials from a PC speaker (tools/sonic_link.py) through the microphone.
+// main/main.c —— GitHub contribution heatmap on the AI Passport.
+//
+// The main page shows the configured user's contribution calendar, 13 weeks
+// per page (UP: older, DOWN: newer). Wi-Fi connects in the background; OK
+// opens the "Wi-Fi by sound" setup pages, whose UP/DOWN keys come back.
+// Downloaded history is kept in NVS, so it is on screen right after power-on;
+// only the rolling year is refreshed once online. After 10 minutes without a
+// key press the device powers down (deep sleep); any key turns it back on.
 //
 // Tasks and ownership:
 //   - button callbacks (esp_timer task), Wi-Fi/IP event handlers (event loop
-//     task), the Wi-Fi timeout timer and the audio worker only post messages
-//     to s_queue;
-//   - the controller task owns app_flow, wifi_link, the listener lifecycle and
-//     all UI calls (which take the LVGL lock themselves);
+//     task), the Wi-Fi timeout timer, the audio worker and the download
+//     worker only post messages to s_queue;
+//   - the controller task owns app_flow, wifi_link, the listener lifecycle,
+//     the contribution store and view, download scheduling, NVS history, the
+//     power-off sequence, and all UI calls (which take the LVGL lock themselves);
 //   - LVGL renders in its own port task.
-// The only on-screen button of each page is activated with the OK key; any key
-// press first wakes a dimmed backlight.
+// Any key press first wakes a dimmed backlight and does nothing else.
 #include "app_flow.h"
 #include "app_text.h"
 #include "app_ui.h"
+#include "gh_fetch.h"
+#include "hm_nvs.h"
+#include "hm_store.h"
+#include "hm_ui.h"
+#include "hm_view.h"
 #include "sonic_listener.h"
 #include "wifi_link.h"
 #include "wifi_policy.h"
@@ -26,15 +37,18 @@
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "sdkconfig.h"
 
 #include <stdio.h>
 #include <string.h>
 
-static const char *TAG = "sound_wifi";
+static const char *TAG = "heatmap";
 
 #define QUEUE_DEPTH          16
 #define CONTROLLER_STACK     6144
@@ -44,16 +58,23 @@ static const char *TAG = "sound_wifi";
 #define LISTEN_GRACE_MS      5000       // never time out in the middle of a frame
 #define NOTICE_MS            2500
 #define BATTERY_PERIOD_MS    30000
-#define SIGNAL_PERIOD_MS     5000
 #define IDLE_DIM_MS          60000
+#define POWER_OFF_IDLE_MS    (10 * 60 * 1000)   // no key press for this long: power down
 #define BACKLIGHT_ON         100
 #define BACKLIGHT_DIM        12
+#define REFRESH_MS           (30 * 60 * 1000)   // the API caches results for an hour
+#define FETCH_RETRY_MS       30000              // first retry of a failed download
+#define FETCH_RETRY_MAX_MS   (10 * 60 * 1000)
+#define YEAR_RETRY_MS        30000
+#define WIFI_RETRY_MS        15000              // first background reconnect
+#define WIFI_RETRY_MAX_MS    (5 * 60 * 1000)
 #define SSID_TEXT_CAP        (SONIC_WIFI_SSID_MAX + 1)
 
 typedef enum {
     MSG_BUTTON = 0,
     MSG_WIFI,
     MSG_LISTENER,
+    MSG_FETCH,
 } msg_kind_t;
 
 typedef struct {
@@ -65,6 +86,7 @@ typedef struct {
         } button;
         wifi_link_msg_t wifi;
         sonic_listener_event_t listener;
+        gh_fetch_done_t fetch;
     };
 } app_msg_t;
 
@@ -72,16 +94,28 @@ static QueueHandle_t s_queue;
 static app_flow_t s_flow;
 static sonic_wifi_credentials_t s_saved;     // what flash holds
 static sonic_wifi_credentials_t s_active;    // what is being connected/used
-static bool s_have_saved;
 static bool s_battery_ok;
-static bool s_saved_now;
-static bool s_save_failed;
 static bool s_listener_stop_pending;
 static bool s_dimmed;
 static int64_t s_listen_deadline_us;
 static int64_t s_damaged_until_us;
 static int64_t s_unsupported_until_us;
 static int64_t s_last_input_us;
+static uint8_t s_wifi_failures;
+static int64_t s_wifi_retry_us;
+
+// Contributions (controller task only).
+static hm_store_t s_store;
+static hm_view_t s_view;
+static hm_page_t s_page;                     // scratch, static to spare the stack
+static gh_block_t s_block;                   // scratch copy of a download
+static uint32_t s_fetch_id;                  // download in flight, 0 when none
+static bool s_refreshed;                     // rolling year downloaded since power-on
+static int64_t s_last_ok_us;                 // last successful rolling-year download
+static int64_t s_last_retry_us;              // earliest next rolling-year attempt
+static uint8_t s_last_failures;
+static int s_year_failed;                    // calendar year whose download failed
+static int64_t s_year_retry_us;
 
 static int64_t now_us(void)
 {
@@ -103,9 +137,9 @@ static void log_heap(const char *where)
 // Producers (other tasks): enqueue only.
 // ---------------------------------------------------------------------------
 
-static void post(const app_msg_t *msg)
+static void post(const app_msg_t *msg, TickType_t wait)
 {
-    if (s_queue && xQueueSend(s_queue, msg, 0) != pdTRUE) {
+    if (s_queue && xQueueSend(s_queue, msg, wait) != pdTRUE) {
         ESP_LOGW(TAG, "event queue full; message %d dropped", (int)msg->kind);
     }
 }
@@ -114,19 +148,26 @@ static void on_button(bsp_btn_t btn, bsp_btn_ev_t event, void *user)
 {
     (void)user;
     const app_msg_t msg = { .kind = MSG_BUTTON, .button = { .btn = btn, .event = event } };
-    post(&msg);
+    post(&msg, 0);
 }
 
 static void on_wifi(const wifi_link_msg_t *wifi)
 {
     const app_msg_t msg = { .kind = MSG_WIFI, .wifi = *wifi };
-    post(&msg);
+    post(&msg, 0);
 }
 
 static void on_listener(sonic_listener_event_t event)
 {
     const app_msg_t msg = { .kind = MSG_LISTENER, .listener = event };
-    post(&msg);
+    post(&msg, 0);
+}
+
+// The download worker may wait: a lost result would stall downloading.
+static void on_fetch(const gh_fetch_done_t *done)
+{
+    const app_msg_t msg = { .kind = MSG_FETCH, .fetch = *done };
+    post(&msg, portMAX_DELAY);
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +177,29 @@ static void on_listener(sonic_listener_event_t event)
 static void active_ssid(char *out)
 {
     app_text_ssid(s_active.ssid, s_active.ssid_len, out, SSID_TEXT_CAP);
+}
+
+static const char *empty_reason(void)
+{
+    if (!s_flow.have_saved) return "Wi-Fi is not set up.\nPress OK to set it up.";
+    switch (s_flow.link) {
+    case APP_LINK_CONNECTING:
+        return "Connecting to Wi-Fi...";
+    case APP_LINK_UP:
+        return s_last_failures ? "Could not reach GitHub.\nTrying again soon."
+                               : "Loading contributions...";
+    case APP_LINK_WAITING:
+    case APP_LINK_OFF:
+    default:
+        return "Wi-Fi is not connected.\nPress OK to set it up.";
+    }
+}
+
+static void render_heatmap(void)
+{
+    hm_view_build(&s_view, &s_store, &s_page);
+    hm_ui_set_page(&s_page, empty_reason());
+    hm_ui_set_online(s_flow.link == APP_LINK_UP);
 }
 
 static void update_connecting(void)
@@ -165,27 +229,6 @@ static void update_connecting(void)
     app_ui_set_connecting(line, (uint16_t)progress);
 }
 
-static void show_connected(void)
-{
-    wifi_link_info_t info = { 0 };
-    if (!wifi_link_info(&info)) strcpy(info.ip, "-");
-    char ssid[SSID_TEXT_CAP];
-    active_ssid(ssid);
-    const app_ui_connected_t ui = {
-        .ssid = ssid,
-        .ip = info.ip,
-        .netmask = info.netmask[0] ? info.netmask : "-",
-        .gateway = info.gateway[0] ? info.gateway : "-",
-        .dns = info.dns[0] ? info.dns : "-",
-        .rssi = info.rssi,
-        .channel = info.channel,
-        .footnote = s_save_failed ? "Could not save for next start"
-                  : (s_saved_now ? "Saved for next start" : NULL),
-        .footnote_warning = s_save_failed,
-    };
-    app_ui_show_connected(&ui);
-}
-
 static void show_failed(void)
 {
     const wifi_fail_t fail = wifi_link_failure();
@@ -205,6 +248,10 @@ static void render(void)
 {
     char ssid[SSID_TEXT_CAP];
     switch (s_flow.state) {
+    case APP_STATE_HEATMAP:
+        hm_ui_show();
+        render_heatmap();
+        break;
     case APP_STATE_CONNECTING:
         active_ssid(ssid);
         app_ui_show_connecting(ssid);
@@ -215,9 +262,6 @@ static void render(void)
         break;
     case APP_STATE_LISTENING:
         app_ui_show_listening();
-        break;
-    case APP_STATE_CONNECTED:
-        show_connected();
         break;
     case APP_STATE_FAILED:
         show_failed();
@@ -253,26 +297,31 @@ static void start_listener(void)
 
 static void save_active(void)
 {
-    s_saved_now = false;
-    s_save_failed = wifi_link_save(&s_active) != ESP_OK;
-    if (!s_save_failed) {
+    if (wifi_link_save(&s_active) == ESP_OK) {
         s_saved = s_active;
-        s_have_saved = true;
-        s_saved_now = true;
+        s_flow.have_saved = true;
         ESP_LOGI(TAG, "credentials saved for the next start");
+    } else {
+        ESP_LOGW(TAG, "credentials work but could not be saved");
     }
 }
 
 static void start_connect(void)
 {
-    s_saved_now = false;
-    s_save_failed = false;
     log_heap("connect");
     if (wifi_link_begin(&s_active) == WIFI_LINK_FAILED) {
         dispatch(APP_EVENT_WIFI_FAILED);
-    } else {
+    } else if (s_flow.state == APP_STATE_CONNECTING) {
         update_connecting();
     }
+}
+
+static void schedule_wifi_retry(void)
+{
+    if (s_wifi_failures < UINT8_MAX) s_wifi_failures++;
+    const uint32_t delay = app_retry_delay_ms(WIFI_RETRY_MS, WIFI_RETRY_MAX_MS, s_wifi_failures);
+    s_wifi_retry_us = now_us() + (int64_t)delay * 1000;
+    ESP_LOGI(TAG, "Wi-Fi unavailable; next attempt in %u s", (unsigned)(delay / 1000));
 }
 
 static void apply(uint32_t actions)
@@ -281,9 +330,15 @@ static void apply(uint32_t actions)
     if ((actions & APP_ACTION_CONNECT) && s_flow.source == APP_SOURCE_SAVED) s_active = s_saved;
     if (actions & APP_ACTION_LISTEN_STOP) stop_listener();
     if (actions & APP_ACTION_WIFI_STOP) wifi_link_stop();
+    if (actions & APP_ACTION_FETCH_CANCEL) gh_fetch_cancel();
     if (actions & APP_ACTION_SAVE) save_active();
     if (actions & APP_ACTION_LISTEN_START) start_listener();
-    if (actions & APP_ACTION_RENDER) render();
+    if (actions & APP_ACTION_RETRY_LATER) schedule_wifi_retry();
+    if (actions & APP_ACTION_RENDER) {
+        render();
+    } else if ((actions & APP_ACTION_LINK) && s_flow.state == APP_STATE_HEATMAP) {
+        render_heatmap();
+    }
     if (actions & APP_ACTION_CONNECT) start_connect();
 }
 
@@ -301,11 +356,84 @@ static void wake_screen(void)
 static void dispatch(app_event_t event)
 {
     const app_state_t before = s_flow.state;
+    const app_link_t link_before = s_flow.link;
     const uint32_t actions = app_flow_handle(&s_flow, event);
     if (!actions) return;
-    ESP_LOGI(TAG, "state %d -> %d (event %d)", before, s_flow.state, event);
+    ESP_LOGI(TAG, "state %d -> %d, link %d -> %d (event %d)", before, s_flow.state, link_before,
+             s_flow.link, event);
     if (s_flow.state != before) wake_screen();
+    if (s_flow.link == APP_LINK_UP && link_before != APP_LINK_UP) {
+        // A fresh connection may download at once.
+        s_wifi_failures = 0;
+        s_last_retry_us = 0;
+        s_year_retry_us = 0;
+    }
     apply(actions);
+}
+
+// ---------------------------------------------------------------------------
+// Contribution downloads (controller task).
+// ---------------------------------------------------------------------------
+
+static void start_fetch(gh_fetch_kind_t kind, int year)
+{
+    const uint32_t id = gh_fetch_start(kind, year);
+    if (id) s_fetch_id = id;
+}
+
+// One download at a time: the rolling year first (once per power-on, even when
+// history was restored from flash, then every REFRESH_MS), then the calendar
+// years the current page (plus one page further back) needs.
+static void schedule_fetch(int64_t now)
+{
+    if (s_fetch_id || s_flow.state != APP_STATE_HEATMAP || s_flow.link != APP_LINK_UP) return;
+    const bool due = app_refresh_due(s_refreshed, now, s_last_ok_us, (int64_t)REFRESH_MS * 1000);
+    if (due && now >= s_last_retry_us) {
+        start_fetch(GH_FETCH_LAST, 0);
+        return;
+    }
+    if (!s_store.have_last) return;   // older years need "today" first
+    int32_t from;
+    int32_t to;
+    hm_view_wanted_days(&s_view, &from, &to);
+    const int year = hm_store_missing_year(&s_store, from, to);
+    if (year && !(year == s_year_failed && now < s_year_retry_us)) start_fetch(GH_FETCH_YEAR, year);
+}
+
+static void handle_fetch(const gh_fetch_done_t *done)
+{
+    if (done->id != s_fetch_id) return;
+    s_fetch_id = 0;
+    const int64_t now = now_us();
+    const bool ok = done->status == GH_FETCH_OK && gh_fetch_take(done->id, &s_block);
+    if (done->kind == GH_FETCH_LAST) {
+        // Flash is written only when the calendar actually changed.
+        const bool changed = !s_store.have_last || !hm_block_same(&s_store.last, &s_block);
+        if (ok && hm_store_set_last(&s_store, &s_block)) {
+            s_refreshed = true;
+            s_last_ok_us = now;
+            s_last_failures = 0;
+            if (changed) {
+                const esp_err_t err = hm_nvs_save_last(&s_store, CONFIG_HEATMAP_GITHUB_USER);
+                if (err != ESP_OK) ESP_LOGW(TAG, "rolling year not saved: %s", esp_err_to_name(err));
+            }
+            log_heap("data");
+        } else if (done->status != GH_FETCH_CANCELLED) {
+            if (s_last_failures < UINT8_MAX) s_last_failures++;
+            const uint32_t delay = app_retry_delay_ms(FETCH_RETRY_MS, FETCH_RETRY_MAX_MS, s_last_failures);
+            s_last_retry_us = now + (int64_t)delay * 1000;
+            ESP_LOGW(TAG, "contributions unavailable; retry in %u s", (unsigned)(delay / 1000));
+        }
+    } else if (ok && hm_store_set_year(&s_store, done->year, &s_block)) {
+        if (s_year_failed == done->year) s_year_failed = 0;
+        const esp_err_t err = hm_nvs_save_year(&s_store, CONFIG_HEATMAP_GITHUB_USER, done->year);
+        if (err != ESP_OK) ESP_LOGW(TAG, "year %d not saved: %s", done->year, esp_err_to_name(err));
+    } else if (done->status != GH_FETCH_CANCELLED) {
+        s_year_failed = done->year;
+        s_year_retry_us = now + (int64_t)YEAR_RETRY_MS * 1000;
+    }
+    hm_view_sync(&s_view, &s_store);
+    if (s_flow.state == APP_STATE_HEATMAP) render_heatmap();
 }
 
 // ---------------------------------------------------------------------------
@@ -314,15 +442,28 @@ static void dispatch(app_event_t event)
 
 static void handle_button(bsp_btn_t btn, bsp_btn_ev_t event)
 {
-    if (event != BSP_BTN_CLICK) return;
+    // Any key activity, even a long hold, keeps the device on.
     s_last_input_us = now_us();
+    // Two quick presses arrive as one DOUBLE event instead of two clicks.
+    if (event != BSP_BTN_CLICK && event != BSP_BTN_DOUBLE) return;
     if (s_dimmed) {
-        // The press that wakes the screen does not also trigger the button.
+        // The press that wakes the screen does not also trigger the key.
         bsp_display_backlight(BACKLIGHT_ON);
         s_dimmed = false;
         return;
     }
-    if (btn == BSP_BTN_OK) dispatch(APP_EVENT_BUTTON);
+    if (btn == BSP_BTN_OK) {
+        dispatch(APP_EVENT_OK);
+        return;
+    }
+    if (s_flow.state != APP_STATE_HEATMAP) {
+        dispatch(APP_EVENT_BACK);
+        return;
+    }
+    const int direction = btn == BSP_BTN_UP ? -1 : 1;
+    bool moved = hm_view_scroll(&s_view, &s_store, direction);
+    if (event == BSP_BTN_DOUBLE) moved |= hm_view_scroll(&s_view, &s_store, direction);
+    if (moved) render_heatmap();
 }
 
 static void handle_wifi(const wifi_link_msg_t *msg)
@@ -341,8 +482,6 @@ static void handle_wifi(const wifi_link_msg_t *msg)
         dispatch(APP_EVENT_WIFI_LOST);
         break;
     case WIFI_LINK_INFO_CHANGED:
-        if (s_flow.state == APP_STATE_CONNECTED) show_connected();
-        break;
     case WIFI_LINK_NONE:
         break;
     }
@@ -402,10 +541,49 @@ static void update_listening(int64_t now)
     app_ui_set_listening(&ui);
 }
 
+static void log_power_step(const char *step, esp_err_t err)
+{
+    if (err != ESP_OK) ESP_LOGW(TAG, "power off continues: %s failed: %s", step, esp_err_to_name(err));
+}
+
+// "Power off": the firmware cannot disconnect the battery (the hardware power
+// button does that), so the device enters deep sleep with its peripherals shut
+// down and wakes, i.e. restarts, when any of the three keys is pressed. The
+// history is already in NVS. Terminal: it never returns.
+static void power_off(void)
+{
+    ESP_LOGI(TAG, "no key pressed for %d min: powering off until a key is pressed",
+             POWER_OFF_IDLE_MS / 60000);
+    // Long-lived radio work first; its tasks stop for good once the chip sleeps.
+    gh_fetch_cancel();
+    stop_listener();
+    wifi_link_stop();
+    // Never sleep without a key wake. A key held at this moment, or a driver
+    // that cannot be released, restarts the device instead (as a wake would).
+    const esp_err_t wake = bsp_button_prepare_deep_sleep();
+    if (wake != ESP_OK) {
+        ESP_LOGW(TAG, "key wake not armed (%s); restarting instead", esp_err_to_name(wake));
+        esp_restart();
+    }
+    // BSP deep-sleep contract: shared-bus devices, then their pins, then the panel.
+    log_power_step("CW2017 suspend", bsp_battery_sleep());
+    log_power_step("ES8311 suspend", bsp_audio_sleep());
+    log_power_step("I2S pin release", bsp_audio_prepare_deep_sleep());
+    log_power_step("shared I2C pin release", bsp_i2c_prepare_deep_sleep());
+    // Keep the LVGL lock so no flush reaches the panel after it sleeps.
+    if (!bsp_lvgl_lock(1000)) {
+        ESP_LOGE(TAG, "cannot stop LVGL before the panel sleeps; restarting");
+        esp_restart();
+    }
+    log_power_step("ST7789 suspend", bsp_display_prepare_deep_sleep());
+    esp_deep_sleep_start();
+    // The buses cannot be resumed in this run after the steps above.
+    esp_restart();
+}
+
 static void tick(void)
 {
     static int64_t last_battery_us;
-    static int64_t last_signal_us;
     const int64_t now = now_us();
 
     if (s_listener_stop_pending && sonic_listener_stop() == ESP_OK) s_listener_stop_pending = false;
@@ -417,29 +595,34 @@ static void tick(void)
     case APP_STATE_CONNECTING:
         update_connecting();
         break;
-    case APP_STATE_CONNECTED:
-        if (now - last_signal_us >= (int64_t)SIGNAL_PERIOD_MS * 1000) {
-            last_signal_us = now;
-            wifi_link_info_t info;
-            wifi_link_refresh_signal();
-            if (wifi_link_info(&info)) app_ui_set_signal(info.rssi, info.channel);
-        }
+    case APP_STATE_HEATMAP:
+        if (s_flow.link == APP_LINK_WAITING && now >= s_wifi_retry_us) dispatch(APP_EVENT_RETRY);
         break;
     default:
         break;
     }
+    schedule_fetch(now);
 
+    // The battery level is shown on the Wi-Fi pages only; the heatmap page
+    // keeps its top edge free.
     if (s_battery_ok && (last_battery_us == 0 || now - last_battery_us >= (int64_t)BATTERY_PERIOD_MS * 1000)) {
         last_battery_us = now;
         app_ui_set_battery(bsp_battery_soc());
     }
 
     // Dim only on pages that wait for the user; listening/connecting stay bright.
-    const bool waiting = s_flow.state == APP_STATE_SETUP || s_flow.state == APP_STATE_CONNECTED ||
+    const bool waiting = s_flow.state == APP_STATE_HEATMAP || s_flow.state == APP_STATE_SETUP ||
                          s_flow.state == APP_STATE_FAILED;
-    if (!s_dimmed && waiting && now - s_last_input_us >= (int64_t)IDLE_DIM_MS * 1000) {
+    const int64_t idle_us = now - s_last_input_us;
+    if (waiting && idle_us >= (int64_t)POWER_OFF_IDLE_MS * 1000) power_off();
+    if (!s_dimmed && waiting && idle_us >= (int64_t)IDLE_DIM_MS * 1000) {
         bsp_display_backlight(BACKLIGHT_DIM);
         s_dimmed = true;
+        if (s_flow.state == APP_STATE_HEATMAP && !s_view.follow_today) {
+            // Unattended, the page returns to the current weeks.
+            hm_view_to_today(&s_view, &s_store);
+            render_heatmap();
+        }
     }
 }
 
@@ -449,12 +632,17 @@ static void controller_task(void *arg)
     if (wifi_link_init(on_wifi) != ESP_OK) {
         ESP_LOGE(TAG, "Wi-Fi unavailable; connection attempts will report an error");
     }
-    s_have_saved = wifi_link_load(&s_saved);
-    ESP_LOGI(TAG, "saved Wi-Fi: %s", s_have_saved ? "yes" : "no");
+    const bool have_saved = wifi_link_load(&s_saved);
+    ESP_LOGI(TAG, "saved Wi-Fi: %s", have_saved ? "yes" : "no");
+    hm_store_init(&s_store);
+    hm_view_init(&s_view);
+    // The stored history is on screen from the first frame; only the rolling
+    // year is refreshed once Wi-Fi connects.
+    if (hm_nvs_load(&s_store, CONFIG_HEATMAP_GITHUB_USER)) hm_view_sync(&s_view, &s_store);
     log_heap("ready");
     s_last_input_us = now_us();
     app_flow_init(&s_flow);
-    dispatch(s_have_saved ? APP_EVENT_BOOT_SAVED : APP_EVENT_BOOT_EMPTY);
+    dispatch(have_saved ? APP_EVENT_BOOT_SAVED : APP_EVENT_BOOT_EMPTY);
 
     int64_t next_tick = now_us();
     for (;;) {
@@ -462,9 +650,12 @@ static void controller_task(void *arg)
         const TickType_t wait = wait_us > 0 ? pdMS_TO_TICKS(wait_us / 1000) : 0;
         app_msg_t msg;
         if (xQueueReceive(s_queue, &msg, wait) == pdTRUE) {
-            if (msg.kind == MSG_BUTTON) handle_button(msg.button.btn, msg.button.event);
-            else if (msg.kind == MSG_WIFI) handle_wifi(&msg.wifi);
-            else handle_listener(msg.listener);
+            switch (msg.kind) {
+            case MSG_BUTTON:   handle_button(msg.button.btn, msg.button.event); break;
+            case MSG_WIFI:     handle_wifi(&msg.wifi); break;
+            case MSG_LISTENER: handle_listener(msg.listener); break;
+            case MSG_FETCH:    handle_fetch(&msg.fetch); break;
+            }
         }
         if (now_us() >= next_tick) {
             next_tick = now_us() + (int64_t)TICK_MS * 1000;
@@ -475,10 +666,11 @@ static void controller_task(void *arg)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Wi-Fi by sound starting");
+    ESP_LOGI(TAG, "GitHub contribution heatmap starting (%s)",
+             esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO ? "woken by a key" : "power-on or reset");
     bsp_i2c_init();
-    // The display is required: without it there is no way to show progress.
-    if (bsp_display_init() != ESP_OK || !bsp_lvgl_init() || !app_ui_init()) {
+    // The display is required: without it there is nothing to show.
+    if (bsp_display_init() != ESP_OK || !bsp_lvgl_init() || !app_ui_init() || !hm_ui_init()) {
         ESP_LOGE(TAG, "display/LVGL init failed (MOSI=%d SCLK=%d CS=%d DC=%d BL=%d)",
                  BSP_LCD_MOSI, BSP_LCD_SCLK, BSP_LCD_CS, BSP_LCD_DC, BSP_LCD_BL);
         return;
@@ -495,8 +687,16 @@ void app_main(void)
     }
 
     s_queue = xQueueCreate(QUEUE_DEPTH, sizeof(app_msg_t));
-    if (!s_queue || xTaskCreate(controller_task, "app_ctrl", CONTROLLER_STACK, NULL,
-                                CONTROLLER_PRIORITY, NULL) != pdPASS) {
+    if (!s_queue) {
+        ESP_LOGE(TAG, "cannot create the event queue");
+        return;
+    }
+    const esp_err_t fetch_err = gh_fetch_init(CONFIG_HEATMAP_GITHUB_USER, on_fetch);
+    if (fetch_err != ESP_OK) {
+        ESP_LOGE(TAG, "download worker unavailable: %s", esp_err_to_name(fetch_err));
+    }
+    if (xTaskCreate(controller_task, "app_ctrl", CONTROLLER_STACK, NULL, CONTROLLER_PRIORITY,
+                    NULL) != pdPASS) {
         ESP_LOGE(TAG, "cannot create the controller task");
         return;
     }

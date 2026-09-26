@@ -11,6 +11,9 @@ static int create_calls, callback_calls, fail_create, fail_callback;
 static int fail_adc, fail_channel, fail_cal, fail_read, fail_convert, fail_delete;
 static int raw_mv, reads, events;
 static int64_t clock_us;
+static int timer_running, stop_calls, fail_gpio, fail_wake, pad_level = 1;
+static int gpio_configs, wake_armed, wake_disabled, expect_stopped;
+static gpio_config_t last_gpio;
 
 esp_err_t adc_oneshot_new_unit(const adc_oneshot_unit_init_cfg_t *cfg, adc_oneshot_unit_handle_t *h) {
     assert(cfg->unit_id == BSP_BTN_ADC_UNIT && !adc_live);
@@ -52,17 +55,45 @@ esp_err_t iot_button_create(const button_config_t *cfg, const button_driver_t *d
     for (int i = 0; i < BSP_BTN_COUNT; ++i) {
         if (buttons[i].live) continue;
         buttons[i] = (struct button_dev_t){ .driver = (button_driver_t *)driver, .live = true };
-        *h = &buttons[i]; ++live_buttons;
+        *h = &buttons[i]; ++live_buttons; timer_running = 1;
         assert(driver->get_key_level((button_driver_t *)driver) == BUTTON_INACTIVE);
         return ESP_OK;
     }
     assert(false); return ESP_FAIL;
 }
+esp_err_t iot_button_stop(void) {
+    ++stop_calls;
+    if (!timer_running) return ESP_ERR_INVALID_STATE;
+    timer_running = 0; return ESP_OK;
+}
+esp_err_t gpio_config(const gpio_config_t *cfg) {
+    // The pad may only become digital once the ADC has let go of it.
+    assert(!adc_live && !cal_live && !live_buttons);
+    ++gpio_configs; last_gpio = *cfg;
+    return fail_gpio ? ESP_FAIL : ESP_OK;
+}
+int gpio_get_level(gpio_num_t gpio) {
+    assert(gpio == BSP_BTN_GPIO && gpio_configs);
+    return pad_level;
+}
+esp_err_t esp_deep_sleep_enable_gpio_wakeup(uint64_t mask, esp_deepsleep_gpio_wake_up_mode_t mode) {
+    assert(mask == (1ULL << BSP_BTN_GPIO) && mode == ESP_GPIO_WAKEUP_GPIO_LOW);
+    if (fail_wake) return ESP_ERR_INVALID_ARG;
+    wake_armed = 1; return ESP_OK;
+}
+esp_err_t esp_sleep_disable_wakeup_source(esp_sleep_source_t source) {
+    assert(source == ESP_SLEEP_WAKEUP_GPIO);
+    ++wake_disabled; wake_armed = 0; return ESP_OK;
+}
 esp_err_t iot_button_delete(button_handle_t h) {
     assert(h && h->live && adc_live && cal_live);
+    // Before deep sleep, polling must stop before the unlocked list changes.
+    assert(!expect_stopped || !timer_running);
     if (fail_delete) return ESP_FAIL;
     assert(h->driver->del(h->driver) == ESP_OK);
-    h->live = false; --live_buttons; return ESP_OK;
+    h->live = false; --live_buttons;
+    if (!live_buttons) timer_running = 0;
+    return ESP_OK;
 }
 esp_err_t iot_button_register_cb(button_handle_t h, button_event_t ev, button_event_args_t *args, button_cb_t cb, void *u) {
     (void)args; (void)ev;
@@ -98,6 +129,51 @@ static void check_voltage(int mv, int expected) {
     }
     assert(reads - before == CONFIG_ADC_BUTTON_SAMPLE_TIMES);
 }
+static esp_err_t prepare(void) {
+    expect_stopped = 1;
+    const esp_err_t err = bsp_button_prepare_deep_sleep();
+    expect_stopped = 0;
+    return err;
+}
+static void test_deep_sleep_wake(void) {
+    // Success: polling stops, the ADC is released, GPIO0 is a digital input,
+    // and a low-level wake is armed. Abandoning sleep restores the keys.
+    assert(bsp_button_init(event_cb, &events) == ESP_OK);
+    stop_calls = gpio_configs = 0;
+    assert(prepare() == ESP_OK && stop_calls == 1 && wake_armed);
+    assert(last_gpio.pin_bit_mask == (1ULL << BSP_BTN_GPIO) && last_gpio.mode == GPIO_MODE_INPUT);
+    assert(last_gpio.pull_down_en == GPIO_PULLDOWN_DISABLE && last_gpio.intr_type == GPIO_INTR_DISABLE);
+    assert_clean();
+    assert(bsp_button_read_mv() == -1);
+    wake_armed = 0; retry_success();
+
+    // A held key would satisfy the wake at once: refuse, arm nothing.
+    assert(bsp_button_init(event_cb, &events) == ESP_OK);
+    pad_level = 0;
+    assert(prepare() == ESP_ERR_INVALID_STATE && !wake_armed);
+    pad_level = 1; retry_success();
+
+    // GPIO and wake-source failures are reported and leave no wake armed.
+    assert(bsp_button_init(event_cb, &events) == ESP_OK);
+    fail_gpio = 1;
+    assert(prepare() == ESP_FAIL && !wake_armed);
+    fail_gpio = 0; retry_success();
+    assert(bsp_button_init(event_cb, &events) == ESP_OK);
+    fail_wake = 1; wake_disabled = 0;
+    assert(prepare() == ESP_ERR_INVALID_ARG && !wake_armed && wake_disabled == 1);
+    fail_wake = 0; retry_success();
+
+    // A driver that cannot be released keeps the pad analog: no GPIO change.
+    assert(bsp_button_init(event_cb, &events) == ESP_OK);
+    fail_delete = 1; gpio_configs = 0;
+    assert(prepare() == ESP_ERR_INVALID_STATE && !gpio_configs && !wake_armed);
+    fail_delete = 0; button_cleanup(); retry_success();
+
+    // Without an initialised driver the pad is only switched and armed.
+    stop_calls = 0;
+    assert(prepare() == ESP_OK && wake_armed && stop_calls == 0);
+    wake_armed = 0; assert_clean();
+}
 int main(void) {
     for (int i = 1; i <= BSP_BTN_COUNT; ++i) {
         reset_faults(); fail_create = i;
@@ -131,5 +207,6 @@ int main(void) {
     assert(adc_live && cal_live && live_buttons == BSP_BTN_COUNT);
     assert(bsp_button_init(event_cb, &events) == ESP_ERR_INVALID_STATE);
     fail_delete = 0; button_cleanup(); retry_success();
+    test_deep_sleep_wake();
     puts("BSP button fault-injection tests: PASS");
 }

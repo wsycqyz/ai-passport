@@ -2,40 +2,111 @@
   <a href="README.zh_CN.md">简体中文</a> · <strong>English</strong>
 </p>
 
-# AI Passport: Wi-Fi by Sound
+# AI Passport: GitHub Contribution Heatmap
 
-This `feature/connect-wifi-by-sound` firmware for the FoloToy AI Passport
-(ESP32-C3) connects to Wi-Fi and receives new Wi-Fi credentials as sound played
-by a PC. The sound transport, SonicLink, is a reusable component for later
-projects. The upstream AI Passport documentation is in [docs/README.md](docs/README.md).
+This `feature/display-github-contribution-heatmap` firmware for the FoloToy AI
+Passport (ESP32-C3) shows the GitHub contribution calendar of
+[`wsycqyz`](https://github.com/wsycqyz): a grid of small squares, one per day,
+shaded by that day's contributions. Wi-Fi is set up by sound with the module
+from `feature/connect-wifi-by-sound`. The upstream AI Passport documentation is
+in [docs/README.md](docs/README.md).
 
 ## Behaviour
 
-1. At power-on, saved credentials are used to connect right away. The page shows
-   the progress and a **Re-configure Wi-Fi** button.
-2. Without saved credentials, the device opens the **Set up Wi-Fi** page.
-3. **Start listening** turns the microphone on; the PC plays the setup sound.
-4. After valid credentials arrive, the device connects and shows the progress.
-5. On success it shows the IP configuration and **Re-configure Wi-Fi**. New
-   credentials are saved only after they have connected, so a typo never
-   replaces working ones.
-6. On failure it shows the likely reason, or **Error** when the reason is
-   unknown, and **Re-configure Wi-Fi**.
-7. The flow loops. A dropped connection reconnects with the same credentials.
+1. At power-on without saved Wi-Fi, the **Set up Wi-Fi** page opens.
+2. With saved Wi-Fi, the main page opens at once, whether or not the network
+   can be reached; the device connects in the background, then downloads the
+   calendar.
+3. The main page shows 13 weeks. **UP** shows older weeks and **DOWN** newer
+   ones, 13 weeks per press.
+4. **OK** opens the Wi-Fi setup pages of the sound module. After new
+   credentials connect, the device saves them and returns to the main page.
+   **UP** or **DOWN** on any setup page also returns without changing anything.
+5. Without data (nothing downloaded yet), the main page shows **No data** and
+   the reason: Wi-Fi not set up, connecting, not connected, or GitHub
+   unreachable. Data already downloaded stays on screen when Wi-Fi drops; the
+   status dot turns red.
+6. Downloaded history is stored in flash. After power-on the heatmap appears
+   at once, even offline. Once online, only the rolling year is downloaded again
+   (to add new contributions); older years are never downloaded twice.
+7. After 10 minutes without a key press the device powers off. Any key (UP,
+   DOWN or OK) turns it back on, and it starts as in step 2.
 
-## Pages and controls
+A failed background connection is retried after 15 s, doubling up to every
+5 min; a dropped connection reconnects at once.
 
-Each page has one on-screen button, activated with the **OK** key. After 60 s
-without input on a page that waits for the user, the backlight dims; the first
-key press only wakes it. The battery level is shown in the top-right corner.
+## Main page
 
-| Page | Shows | OK button |
+```text
+        ■ ■ ■ ■ ■ ■ ■      each row is a week, Sunday to Saturday;
+   Jul  ■ ■ ■ ■ ■ ■ ■      the newest week is the bottom row and
+  2026  ■ ■ ■ ■ ■ ■ ■      today its last square
+        ...
+   Sep  ■ ■ ■ ■ ■ ■ ■
+        ■ ■ ■ ■ ■ ■
+  ●          Less ■ ■ ■ ■ ■ More
+```
+
+- Nothing is drawn at the top of the screen, not even the battery level.
+- A month is named in the left gutter at the row of its first Sunday, as on
+  GitHub. The first label on the page and every January also show the year.
+- Bottom left: the online dot, green when connected, red when not.
+- Bottom right: the legend, GitHub's five levels from **Less** to **More**.
+- Squares outlined but not filled are older days that are still downloading.
+- After 60 s without a key press the backlight dims and the page returns to
+  the current weeks. The first key press only wakes the screen. After 10 minutes
+  the device powers off.
+
+| Key | Main page | Wi-Fi setup pages |
 | --- | --- | --- |
-| Connecting | SSID, stage (starting, joining, getting IP), retry count, progress bar | Re-configure Wi-Fi |
-| Set up Wi-Fi | instructions and the reason for being here, if any | Start listening |
-| Listening | live microphone level, receive progress, hints, 90 s countdown | Cancel |
-| Connected | SSID, IP, mask, gateway, DNS, signal and channel | Re-configure Wi-Fi |
-| Connection failed | reason, advice, SSID and ESP-IDF reason code | Re-configure Wi-Fi |
+| UP | 13 weeks older | back to the main page |
+| DOWN | 13 weeks newer | back to the main page |
+| OK | open Wi-Fi setup | the page's on-screen button |
+
+### How much history fits on one screen
+
+The 240 × 320 px panel is about 31 × 41 mm (0.13 mm per pixel). GitHub's
+calendar is 53 weeks by 7 days. Fitting all 53 weeks into the 320 px height
+would leave 4 px (0.5 mm) squares, which cannot be read. Wrapping the year into
+bands is possible at about 10 px squares, but the chosen layout is one row per
+week at 17 px (2.2 mm) squares with 3 px gaps: 13 rows of 20 px, one quarter
+(91 days) per page. The rolling year fills about four pages. Scrolling further
+back downloads older calendar years on demand, one page ahead. History stops
+at the year after the first calendar year without a single contribution, and
+at most 10 years back.
+
+## Contribution data
+
+The device reuses [github-contributions-api](https://github.com/grubersjoe/github-contributions-api)
+by Jonathan Gruber (MIT), the service behind
+[react-github-calendar](https://github.com/grubersjoe/react-github-calendar).
+It scrapes GitHub's public calendar and returns about 15 KB of JSON per year:
+
+```text
+https://github-contributions-api.jogruber.de/v4/wsycqyz?y=last   # the rolling year
+https://github-contributions-api.jogruber.de/v4/wsycqyz?y=2025   # one calendar year
+```
+
+If that service fails, the device reads GitHub's own calendar page directly
+(`https://github.com/users/wsycqyz/contributions`, about 230 KB of HTML). This
+is the approach of other ESP8266/ESP32 displays such as
+[Exploser/Github-Calendar-Scrapper](https://github.com/Exploser/Github-Calendar-Scrapper).
+Both responses are parsed as they stream in, so neither is held in RAM. The
+levels are GitHub's own. No token is needed because the calendar is public.
+
+The rolling year is downloaded after Wi-Fi connects and every 30 minutes; the
+API caches results for up to an hour. A failed download is retried after 30 s,
+doubling up to every 10 minutes.
+
+Everything downloaded is kept in NVS (namespace `heatmap`): the rolling year,
+rewritten only when it changed, and each older year once. At power-on it is
+loaded before the first page is drawn. Changing the GitHub user discards the
+stored history, and years that fall out of the 10-year window are deleted, so
+the 24 KB NVS partition cannot fill up. Flashing the merged image erases this
+history along with the saved Wi-Fi.
+
+To show another account, change **GitHub contribution heatmap → GitHub user
+name** in `idf.py menuconfig` (`CONFIG_HEATMAP_GITHUB_USER`).
 
 ## Quick start
 
@@ -53,26 +124,16 @@ image resets NVS, which also clears saved Wi-Fi credentials; use
 `idf.py flash` to keep them. See
 [flashing and stored data](docs/development/engineering/firmware-layout.md#flashing-and-stored-data).
 
-To skip the build, flash the prebuilt image of this branch,
-[`firmware/FoloToy-AI-Passport-full.bin`](firmware/FoloToy-AI-Passport-full.bin)
-(built from commit `2097a58` with ESP-IDF 5.5.3, SHA-256
-`599b2efbfb3d98111b50ea9cd03c50087df89df2dc9a25ac130f320152f1c14a`). It is
-also a merged image and resets NVS:
-
-```bash
-python -m esptool --chip esp32c3 -p <PORT> -b 460800 write_flash 0x0 firmware/FoloToy-AI-Passport-full.bin
-```
-
 ### 2. Send Wi-Fi credentials from the PC
 
-Run:
+On the device, press **OK** on the main page, then **OK** again
+(**Start listening**). On the PC run:
 
 ```bash
 python tools/sonic_link.py wifi --ssid "MyHome"
 ```
 
-The password is prompted without echo. When the tool asks, press **OK** on the
-device (**Start listening**), then press Enter on the PC to play the sound.
+The password is prompted without echo; press Enter on the PC to play the sound.
 Hold the device 10-50 cm from the speaker at a moderate volume. The tool plays
 three copies of the frame; typical credentials take about 5 s per copy. Only
 the Python 3 standard library is needed. Playback uses `winsound` on Windows,
@@ -91,9 +152,15 @@ the Python 3 standard library is needed. Playback uses `winsound` on Windows,
 | `--rate HZ` | WAV sample rate: 16000, 44100 or 48000 (default 48000) |
 | `--parity N` | Reed-Solomon parity bytes, even, 4..64 (default automatic) |
 
-## Failure reasons
+The setup pages are **Set up Wi-Fi** (**Start listening**), **Listening**
+(microphone level, receive progress, 90 s countdown; **Cancel**),
+**Connecting** (stage and retries; **Re-configure Wi-Fi**) and
+**Connection failed** (**Re-configure Wi-Fi**). They show the battery level in
+the top-right corner. New credentials are saved only after they connect, so a
+typo never replaces working ones. The protocol is specified in
+[docs/assets/sonic-link-protocol.md](docs/assets/sonic-link-protocol.md).
 
-| Title shown | Typical cause | ESP-IDF reason codes |
+| Failure shown | Typical cause | ESP-IDF reason codes |
 | --- | --- | --- |
 | Network not found | wrong name, out of range, 5 GHz-only network | 200, 201, 212 |
 | Wrong password | wrong passphrase | 14, 15, 202, 204 |
@@ -106,48 +173,62 @@ the Python 3 standard library is needed. Playback uses `winsound` on Windows,
 | Wi-Fi error | the radio could not start | - |
 | Error | any other reason; its code is shown | others |
 
-Wrong-password and not-found failures are tried twice, unsupported security,
-invalid passwords and radio errors once, and everything else three times. No
-new attempt starts after 60 s.
-
 ## Architecture
 
 | Path | Responsibility |
 | --- | --- |
-| `components/sonic_link/` | pure C SonicLink receiver, frame builder, Reed-Solomon codec, CRC, Wi-Fi payload codec |
-| `main/sonic_listener.c` | audio worker: wakes the ES8311, feeds the receiver, posts events |
-| `main/wifi_link.c` | station manager: attempts, timeouts, NVS storage after success |
-| `main/wifi_policy.c` | failure classification, retry limits, user messages |
-| `main/app_flow.c` | page state machine |
-| `main/app_ui.c` | application screens |
-| `main/app_text.c` | SSID formatting for the built-in fonts |
-| `main/main.c` | start-up and the controller task |
-| `tools/sonic_link.py` | PC encoder |
+| `main/gh_fetch.c` | download worker: HTTPS with the certificate bundle, API first, GitHub page second, streaming parse, cancel |
+| `main/gh_parse.c` | streaming extractor for the JSON and HTML formats; fixed 372-day window |
+| `main/hm_store.c` | rolling year plus up to 10 calendar years; history limit; which year to download next; flash encoding |
+| `main/hm_nvs.c` | the history in NVS: restore at power-on, save after downloads, prune old years |
+| `main/hm_view.c` | the 13-week page: paging, cell states, month and year labels |
+| `main/hm_calendar.c` | dates as days since 1970, weeks starting on Sunday |
+| `main/hm_ui.c` | main page: calendar drawn by one draw callback, status dot, legend, No data |
+| `main/app_flow.c` | page and background-connection state machine |
+| `main/main.c` | start-up, controller task, download scheduling, idle power-off |
+| `components/bsp/src/bsp_button.c` | `bsp_button_prepare_deep_sleep()`: releases the ADC from GPIO0 and arms it as the key wake |
+| `main/app_ui.c`, `main/sonic_listener.c`, `main/wifi_link.c`, `main/wifi_policy.c`, `main/app_text.c`, `components/sonic_link/`, `tools/sonic_link.py` | the Wi-Fi by sound module |
 
-Button callbacks, Wi-Fi events, the timeout timer, and the audio worker only
-post messages; one controller task owns the state machine, Wi-Fi, the listener
-lifecycle, and UI updates under the LVGL lock. The Wi-Fi radio is off while
-setting up or listening, the codec sleeps unless listening, and Bluetooth is
+Button callbacks, Wi-Fi events, the timeout timer, the audio worker and the
+download worker only post messages. One controller task owns the state
+machine, Wi-Fi, the listener, the contribution store and all UI updates under
+the LVGL lock. The calendar is painted from a copy of the page, with no LVGL
+object per square, to stay within the 24 KB LVGL pool. The Wi-Fi radio is off
+on the setup pages except while new credentials are tried, and Bluetooth is
 disabled. The baseline hardware-test pages (`main/demo_*.c`, `ui_pixel*`) stay
 for the upstream host tests but are not compiled into this firmware.
 
 ## Tests
 
-`./tools/validate.sh --static` also runs the Reed-Solomon tests, receiver
-channel simulations, a check that the Python encoder's WAV decodes with the C
-receiver, the state-machine tests, and the encoder tests.
+`./tools/validate.sh --static` runs `tests/test_heatmap.c` (date arithmetic,
+the parser on synthetic JSON and HTML split at random points, the store, the
+flash encoding, and the page model) and `tests/test_app_flow.c` (every page
+and connection transition), besides the existing SonicLink and repository
+checks. `tests/test_bsp_button.c` covers the key-wake preparation, and
+`tests/test_deep_sleep_contract.py` checks that the idle power-off follows the
+BSP's shutdown order.
 
-## Limitations and security
+## Power-off
 
-- The sound is not encrypted or authenticated: anyone who records it can recover
-  the password or replay it. Send credentials only in private.
-- 2.4 GHz networks with WPA, WPA2 or WPA3 Personal, WEP, or no security.
-  Enterprise networks are not supported.
-- Non-ASCII SSID characters appear as `?` because the built-in fonts cover ASCII
-  only; the connection still uses the exact SSID bytes.
-- Credentials are stored without encryption in NVS namespace `sonic_wifi`.
-- The protocol margins were measured in host simulation; speakers, rooms, and
-  the microphone still need on-device verification.
+The firmware cannot disconnect the battery; only the hardware power button
+does that. "Power off" is therefore a deep sleep with everything else shut
+down, in the BSP's order: Wi-Fi off, fuel gauge asleep, audio codec suspended
+and its pins released, shared I2C released, and the display off in Sleep In
+with the backlight dark. The three keys share GPIO0, so the key ladder is
+switched from the ADC to a digital input and armed as a low-level wake: any
+key starts the device again from power-on. A key held at that moment makes it
+restart instead of sleeping, because the wake would fire at once. The
+standby current of this sleep has not been measured.
 
-The full protocol is specified in
-[docs/assets/sonic-link-protocol.md](docs/assets/sonic-link-protocol.md).
+## Limitations
+
+- Days follow GitHub's public calendar, which uses UTC; a contribution made in
+  the morning in Australia can appear on the previous day.
+- After power-on the device shows the history as of its last download until
+  Wi-Fi connects; it has no clock of its own.
+- The main page depends on the third-party API or on the layout of GitHub's
+  calendar page; if both change or are unreachable, it shows **No data**.
+- Both services see the device's IP address and the user name it asks for.
+- The Wi-Fi by sound limitations apply: the sound is not encrypted, only
+  2.4 GHz personal networks are supported, and credentials are stored without
+  encryption in NVS namespace `sonic_wifi`.
