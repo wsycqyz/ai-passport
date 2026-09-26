@@ -107,6 +107,16 @@ ESP-IDF 5.5.3：
 也就会清除保存的 Wi-Fi 凭证；如需保留，请使用 `idf.py flash`。参见
 [烧录与已存数据](docs/development/engineering/firmware-layout.zh_CN.md#烧录与已存数据)。
 
+如不想自行构建，可以烧录本分支的预构建镜像
+[`firmware/FoloToy-AI-Passport-full.bin`](firmware/FoloToy-AI-Passport-full.bin)
+（由提交 `53d8816` 使用 ESP-IDF 5.5.3 构建，SHA-256
+`e15f725f2d9c10ab804a5b26c931bedd66af4635080500fb273d0056f789d16f`）。它同样是
+合并镜像，会重置 NVS，包括保存的 Wi-Fi 和已保存的贡献历史：
+
+```bash
+python -m esptool --chip esp32c3 -p <PORT> -b 460800 write_flash 0x0 firmware/FoloToy-AI-Passport-full.bin
+```
+
 ### 2. 从电脑发送 Wi-Fi 凭证
 
 在设备主页面按 **OK**，再按一次 **OK**（**Start listening**）。在电脑上运行：
