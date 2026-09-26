@@ -161,8 +161,8 @@ image resets NVS, which also clears saved Wi-Fi credentials; use
 
 To skip the build, flash the prebuilt image of this branch,
 [`firmware/FoloToy-AI-Passport-full.bin`](firmware/FoloToy-AI-Passport-full.bin)
-(built from commit `1c308f1` with ESP-IDF 5.5.3, SHA-256
-`72c4016f42a077b51bcd2a6c786fccc27026434dc509007cb718df005a4c87e0`). It is
+(built from commit `20f90cd` with ESP-IDF 5.5.3, SHA-256
+`e2550f61f4fbbf56e5affc7d69b3aece4db63ac06f3fb33a9e3db8e67e3c1d11`). It is
 also a merged image and resets NVS, including the saved Wi-Fi and the stored
 contribution history:
 

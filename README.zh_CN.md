@@ -136,8 +136,8 @@ ESP-IDF 5.5.3：
 
 如不想自行构建，可以烧录本分支的预构建镜像
 [`firmware/FoloToy-AI-Passport-full.bin`](firmware/FoloToy-AI-Passport-full.bin)
-（由提交 `1c308f1` 使用 ESP-IDF 5.5.3 构建，SHA-256
-`72c4016f42a077b51bcd2a6c786fccc27026434dc509007cb718df005a4c87e0`）。它同样是
+（由提交 `20f90cd` 使用 ESP-IDF 5.5.3 构建，SHA-256
+`e2550f61f4fbbf56e5affc7d69b3aece4db63ac06f3fb33a9e3db8e67e3c1d11`）。它同样是
 合并镜像，会重置 NVS，包括保存的 Wi-Fi 和已保存的贡献历史：
 
 ```bash
