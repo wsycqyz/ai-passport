@@ -30,7 +30,7 @@ The upstream AI Passport documentation is in [docs/README.md](docs/README.md).
 6. Downloaded history is stored in flash. After power-on the heatmap appears
    at once, even offline. Once online, only the rolling year is downloaded again
    (to add new contributions); older years are never downloaded twice.
-7. After 10 minutes without a key press the device powers off. Any key (UP,
+7. After 5 minutes without a key press the device powers off. Any key (UP,
    DOWN or OK) turns it back on, and it starts as in step 2.
 8. When Wi-Fi connects, the device sets its clock from the internet (NTP) and
    shows the work-time bar; until then the bar's place reads **Clock not set**.
@@ -59,7 +59,7 @@ A failed background connection is retried after 15 s, doubling up to every
   to **More**.
 - Squares outlined but not filled are older days that are still downloading.
 - After 60 s without a key press the backlight dims and the page returns to
-  the current weeks. The first key press only wakes the screen. After 10 minutes
+  the current weeks. The first key press only wakes the screen. After 5 minutes
   the device powers off.
 
 | Key | Main page | Wi-Fi setup pages |

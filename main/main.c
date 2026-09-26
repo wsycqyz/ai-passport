@@ -5,7 +5,7 @@
 // (UTC+8; the clock is set from NTP once Wi-Fi is up). Wi-Fi connects in the
 // background; OK opens the "Wi-Fi by sound" setup pages, whose UP/DOWN keys
 // come back. Downloaded history is kept in NVS, so it is on screen right after
-// power-on; only the rolling year is refreshed once online. After 10 minutes
+// power-on; only the rolling year is refreshed once online. After 5 minutes
 // without a key press the device powers down (deep sleep); any key turns it
 // back on.
 //
@@ -65,7 +65,7 @@ static const char *TAG = "heatmap";
 #define NOTICE_MS            2500
 #define BATTERY_PERIOD_MS    30000
 #define IDLE_DIM_MS          60000
-#define POWER_OFF_IDLE_MS    (10 * 60 * 1000)   // no key press for this long: power down
+#define POWER_OFF_IDLE_MS    (5 * 60 * 1000)    // no key press for this long: power down
 #define BACKLIGHT_ON         100
 #define BACKLIGHT_DIM        12
 #define REFRESH_MS           (30 * 60 * 1000)   // the API caches results for an hour
