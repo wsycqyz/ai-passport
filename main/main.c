@@ -1,24 +1,28 @@
 // main/main.c —— GitHub contribution heatmap on the AI Passport.
 //
 // The main page shows the configured user's contribution calendar, 13 weeks
-// per page (UP: older, DOWN: newer). Wi-Fi connects in the background; OK
-// opens the "Wi-Fi by sound" setup pages, whose UP/DOWN keys come back.
-// Downloaded history is kept in NVS, so it is on screen right after power-on;
-// only the rolling year is refreshed once online. After 10 minutes without a
-// key press the device powers down (deep sleep); any key turns it back on.
+// per page (UP: older, DOWN: newer), and a bar of the work time left today
+// (UTC+8; the clock is set from NTP once Wi-Fi is up). Wi-Fi connects in the
+// background; OK opens the "Wi-Fi by sound" setup pages, whose UP/DOWN keys
+// come back. Downloaded history is kept in NVS, so it is on screen right after
+// power-on; only the rolling year is refreshed once online. After 10 minutes
+// without a key press the device powers down (deep sleep); any key turns it
+// back on.
 //
 // Tasks and ownership:
 //   - button callbacks (esp_timer task), Wi-Fi/IP event handlers (event loop
-//     task), the Wi-Fi timeout timer, the audio worker and the download
-//     worker only post messages to s_queue;
+//     task), the Wi-Fi timeout timer, the audio worker, the download worker
+//     and the NTP client (lwIP task) only post messages to s_queue;
 //   - the controller task owns app_flow, wifi_link, the listener lifecycle,
 //     the contribution store and view, download scheduling, NVS history, the
-//     power-off sequence, and all UI calls (which take the LVGL lock themselves);
+//     work-time bar, the power-off sequence, and all UI calls (which take the
+//     LVGL lock themselves);
 //   - LVGL renders in its own port task.
 // Any key press first wakes a dimmed backlight and does nothing else.
 #include "app_flow.h"
 #include "app_text.h"
 #include "app_ui.h"
+#include "clock_sync.h"
 #include "gh_fetch.h"
 #include "hm_nvs.h"
 #include "hm_store.h"
@@ -27,6 +31,7 @@
 #include "sonic_listener.h"
 #include "wifi_link.h"
 #include "wifi_policy.h"
+#include "work_bar.h"
 
 #include "bsp_audio.h"
 #include "bsp_battery.h"
@@ -47,6 +52,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 static const char *TAG = "heatmap";
 
@@ -69,12 +75,20 @@ static const char *TAG = "heatmap";
 #define WIFI_RETRY_MS        15000              // first background reconnect
 #define WIFI_RETRY_MAX_MS    (5 * 60 * 1000)
 #define SSID_TEXT_CAP        (SONIC_WIFI_SSID_MAX + 1)
+// The work-time bar's clock: the time zone is fixed at UTC+8.
+#define LOCAL_UTC_OFFSET_MIN (8 * 60)
+#define WORK_START_MIN       (CONFIG_HEATMAP_WORK_START_HOUR * 60)
+#define WORK_END_MIN         (CONFIG_HEATMAP_WORK_END_HOUR * 60)
+
+_Static_assert(CONFIG_HEATMAP_WORK_END_HOUR > CONFIG_HEATMAP_WORK_START_HOUR,
+               "the work day must end after it starts");
 
 typedef enum {
     MSG_BUTTON = 0,
     MSG_WIFI,
     MSG_LISTENER,
     MSG_FETCH,
+    MSG_TIME,
 } msg_kind_t;
 
 typedef struct {
@@ -87,6 +101,7 @@ typedef struct {
         wifi_link_msg_t wifi;
         sonic_listener_event_t listener;
         gh_fetch_done_t fetch;
+        int64_t utc;                         // MSG_TIME: the time the clock was set to
     };
 } app_msg_t;
 
@@ -116,6 +131,7 @@ static int64_t s_last_retry_us;              // earliest next rolling-year attem
 static uint8_t s_last_failures;
 static int s_year_failed;                    // calendar year whose download failed
 static int64_t s_year_retry_us;
+static work_bar_t s_work_bar;                // what the bar shows (zero: off)
 
 static int64_t now_us(void)
 {
@@ -170,6 +186,13 @@ static void on_fetch(const gh_fetch_done_t *done)
     post(&msg, portMAX_DELAY);
 }
 
+// lwIP task: the clock was just set; the next tick would pick it up anyway.
+static void on_clock(int64_t utc)
+{
+    const app_msg_t msg = { .kind = MSG_TIME, .utc = utc };
+    post(&msg, 0);
+}
+
 // ---------------------------------------------------------------------------
 // Rendering (controller task).
 // ---------------------------------------------------------------------------
@@ -186,7 +209,7 @@ static const char *empty_reason(void)
     case APP_LINK_CONNECTING:
         return "Connecting to Wi-Fi...";
     case APP_LINK_UP:
-        return s_last_failures ? "Could not reach GitHub.\nTrying again soon."
+        return s_last_failures ? "Can't reach GitHub.\nTrying again soon."
                                : "Loading contributions...";
     case APP_LINK_WAITING:
     case APP_LINK_OFF:
@@ -363,12 +386,43 @@ static void dispatch(app_event_t event)
              s_flow.link, event);
     if (s_flow.state != before) wake_screen();
     if (s_flow.link == APP_LINK_UP && link_before != APP_LINK_UP) {
-        // A fresh connection may download at once.
+        // A fresh connection may download at once, and sets the clock.
         s_wifi_failures = 0;
         s_last_retry_us = 0;
         s_year_retry_us = 0;
+        const esp_err_t err = clock_sync_start(on_clock);
+        if (err != ESP_OK) ESP_LOGW(TAG, "clock cannot be set: %s", esp_err_to_name(err));
     }
     apply(actions);
+}
+
+// ---------------------------------------------------------------------------
+// Work-time bar (controller task).
+// ---------------------------------------------------------------------------
+
+// Cheap enough for every tick; the screen is touched only when the bar's
+// 5-minute step, colour or availability changed.
+static void update_work_bar(void)
+{
+    work_bar_t bar;
+    work_bar_compute((int64_t)time(NULL), LOCAL_UTC_OFFSET_MIN, WORK_START_MIN, WORK_END_MIN, &bar);
+    if (work_bar_same(&bar, &s_work_bar)) return;
+    s_work_bar = bar;
+    char text[16];
+    work_bar_text(&bar, text, sizeof(text));
+    ESP_LOGI(TAG, "work time left: %s", bar.tone == WORK_BAR_OFF ? "clock not set" : text);
+    if (bar.tone != WORK_BAR_OFF) ESP_LOGI(TAG, "work bar: %u of %u min", bar.left_min, bar.total_min);
+    hm_ui_set_work_bar(&bar);
+}
+
+static void handle_time(int64_t utc)
+{
+    const time_t local = (time_t)(utc + LOCAL_UTC_OFFSET_MIN * 60);
+    struct tm tm;
+    gmtime_r(&local, &tm);
+    ESP_LOGI(TAG, "clock set: %04d-%02d-%02d %02d:%02d:%02d (UTC+8)", tm.tm_year + 1900, tm.tm_mon + 1,
+             tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    update_work_bar();
 }
 
 // ---------------------------------------------------------------------------
@@ -602,6 +656,7 @@ static void tick(void)
         break;
     }
     schedule_fetch(now);
+    update_work_bar();
 
     // The battery level is shown on the Wi-Fi pages only; the heatmap page
     // keeps its top edge free.
@@ -655,6 +710,7 @@ static void controller_task(void *arg)
             case MSG_WIFI:     handle_wifi(&msg.wifi); break;
             case MSG_LISTENER: handle_listener(msg.listener); break;
             case MSG_FETCH:    handle_fetch(&msg.fetch); break;
+            case MSG_TIME:     handle_time(msg.utc); break;
             }
         }
         if (now_us() >= next_tick) {

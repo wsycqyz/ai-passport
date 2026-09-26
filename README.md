@@ -7,9 +7,10 @@
 This `feature/display-github-contribution-heatmap` firmware for the FoloToy AI
 Passport (ESP32-C3) shows the GitHub contribution calendar of
 [`wsycqyz`](https://github.com/wsycqyz): a grid of small squares, one per day,
-shaded by that day's contributions. Wi-Fi is set up by sound with the module
-from `feature/connect-wifi-by-sound`. The upstream AI Passport documentation is
-in [docs/README.md](docs/README.md).
+shaded by that day's contributions. Next to it, a bar shows how much of
+today's work time is left, to push for contributions while the work day lasts.
+Wi-Fi is set up by sound with the module from `feature/connect-wifi-by-sound`.
+The upstream AI Passport documentation is in [docs/README.md](docs/README.md).
 
 ## Behaviour
 
@@ -31,6 +32,8 @@ in [docs/README.md](docs/README.md).
    (to add new contributions); older years are never downloaded twice.
 7. After 10 minutes without a key press the device powers off. Any key (UP,
    DOWN or OK) turns it back on, and it starts as in step 2.
+8. When Wi-Fi connects, the device sets its clock from the internet (NTP) and
+   shows the work-time bar; until then the bar's place reads **Clock not set**.
 
 A failed background connection is retried after 15 s, doubling up to every
 5 min; a dropped connection reconnects at once.
@@ -38,20 +41,22 @@ A failed background connection is retried after 15 s, doubling up to every
 ## Main page
 
 ```text
-        ■ ■ ■ ■ ■ ■ ■      each row is a week, Sunday to Saturday;
-   Jul  ■ ■ ■ ■ ■ ■ ■      the newest week is the bottom row and
-  2026  ■ ■ ■ ■ ■ ■ ■      today its last square
-        ...
-   Sep  ■ ■ ■ ■ ■ ■ ■
-        ■ ■ ■ ■ ■ ■
-  ●          Less ■ ■ ■ ■ ■ More
+        ■ ■ ■ ■ ■ ■ ■     □      left: each row is a week, Sunday to
+   Jul  ■ ■ ■ ■ ■ ■ ■     □      Saturday; the newest week is the bottom
+  2026  ■ ■ ■ ■ ■ ■ ■     □      row and today its last square
+        ...                ▆
+   Sep  ■ ■ ■ ■ ■ ■ ■     █      right: the work-time bar, one block per
+        ■ ■ ■ ■ ■ ■       █      work hour, the hours left and the
+                           8h     online dot
+        Less ■ ■ ■ ■ ■ More ●
 ```
 
 - Nothing is drawn at the top of the screen, not even the battery level.
 - A month is named in the left gutter at the row of its first Sunday, as on
   GitHub. The first label on the page and every January also show the year.
-- Bottom left: the online dot, green when connected, red when not.
-- Bottom right: the legend, GitHub's five levels from **Less** to **More**.
+- Under the hours left: the online dot, green when connected, red when not.
+- Bottom right of the calendar: the legend, GitHub's five levels from **Less**
+  to **More**.
 - Squares outlined but not filled are older days that are still downloading.
 - After 60 s without a key press the backlight dims and the page returns to
   the current weeks. The first key press only wakes the screen. After 10 minutes
@@ -73,7 +78,37 @@ week at 17 px (2.2 mm) squares with 3 px gaps: 13 rows of 20 px, one quarter
 (91 days) per page. The rolling year fills about four pages. Scrolling further
 back downloads older calendar years on demand, one page ahead. History stops
 at the year after the first calendar year without a single contribution, and
-at most 10 years back.
+at most 10 years back. To make room for the work-time bar the calendar sits
+12 px left of centre.
+
+## Work-time bar
+
+The bar on the right shows how much of today's work time is left, so a quiet
+day is visible while there is still time to change it. The work day is
+09:00-21:00, UTC+8, every day of the week.
+
+- It is full before 09:00, drains from the top while the work day runs, and is
+  empty after 21:00. It fills again at midnight.
+- Each of its twelve blocks is one work hour; the current hour's block empties
+  from the top in 5-minute steps.
+- Underneath, the hours left, rounded to the nearest hour: 4 h 35 min left
+  shows `5h`, 4 h 25 min shows `4h`, and exactly half an hour rounds up. The
+  last half hour reads `0h`.
+- Colour: green while more than half of the day is left, yellow from half
+  (15:00), red from a fifth (18:40, 2 h 20 min left).
+- The bar changes only on the clock's 5-minute marks and the number only on
+  the half hours; nothing else is redrawn for them. That is at most 12 small
+  redraws an hour, each far cheaper than the backlight.
+- Until the clock is set, the bar is replaced by **Clock not set**.
+
+The clock is set from the public NTP servers `pool.ntp.org` and
+`time.cloudflare.com` each time Wi-Fi connects, and then every hour. The time
+zone is fixed at UTC+8. The clock keeps running through the idle power-off, so
+the bar is back at once when a key wakes the device; it is lost only when the
+power is cut, for example with the power button. The work hours can be changed
+in `idf.py menuconfig` under **GitHub contribution heatmap**
+(`CONFIG_HEATMAP_WORK_START_HOUR`, `CONFIG_HEATMAP_WORK_END_HOUR`); colours and
+blocks follow the new length.
 
 ## Contribution data
 
@@ -194,28 +229,35 @@ typo never replaces working ones. The protocol is specified in
 | `main/hm_nvs.c` | the history in NVS: restore at power-on, save after downloads, prune old years |
 | `main/hm_view.c` | the 13-week page: paging, cell states, month and year labels |
 | `main/hm_calendar.c` | dates as days since 1970, weeks starting on Sunday |
-| `main/hm_ui.c` | main page: calendar drawn by one draw callback, status dot, legend, No data |
+| `main/hm_ui.c` | main page: calendar and work-time bar drawn by draw callbacks, status dot, legend, No data, Clock not set |
+| `main/work_bar.c` | the work-time bar's state: blocks in 5-minute steps, hours left to the nearest hour, colour |
+| `main/clock_sync.c` | the clock from NTP (`pool.ntp.org`, `time.cloudflare.com`) after each connection |
 | `main/app_flow.c` | page and background-connection state machine |
-| `main/main.c` | start-up, controller task, download scheduling, idle power-off |
+| `main/main.c` | start-up, controller task, download scheduling, work-time bar updates, idle power-off |
 | `components/bsp/src/bsp_button.c` | `bsp_button_prepare_deep_sleep()`: releases the ADC from GPIO0 and arms it as the key wake |
 | `main/app_ui.c`, `main/sonic_listener.c`, `main/wifi_link.c`, `main/wifi_policy.c`, `main/app_text.c`, `components/sonic_link/`, `tools/sonic_link.py` | the Wi-Fi by sound module |
 
-Button callbacks, Wi-Fi events, the timeout timer, the audio worker and the
-download worker only post messages. One controller task owns the state
-machine, Wi-Fi, the listener, the contribution store and all UI updates under
-the LVGL lock. The calendar is painted from a copy of the page, with no LVGL
-object per square, to stay within the 24 KB LVGL pool. The Wi-Fi radio is off
-on the setup pages except while new credentials are tried, and Bluetooth is
-disabled. The baseline hardware-test pages (`main/demo_*.c`, `ui_pixel*`) stay
-for the upstream host tests but are not compiled into this firmware.
+Button callbacks, Wi-Fi events, the timeout timer, the audio worker, the
+download worker and the NTP client only post messages. One controller task owns
+the state machine, Wi-Fi, the listener, the contribution store, the work-time
+bar and all UI updates under the LVGL lock. The calendar and the bar are painted
+from copies of their state, with no LVGL object per square, to stay within the
+24 KB LVGL pool. The Wi-Fi radio is off on the setup pages except while new
+credentials are tried, and Bluetooth is disabled. The baseline hardware-test
+pages (`main/demo_*.c`, `ui_pixel*`) stay for the upstream host tests but are
+not compiled into this firmware.
 
 ## Tests
 
 `./tools/validate.sh --static` runs `tests/test_heatmap.c` (date arithmetic,
 the parser on synthetic JSON and HTML split at random points, the store, the
-flash encoding, and the page model) and `tests/test_app_flow.c` (every page
-and connection transition), besides the existing SonicLink and repository
-checks. `tests/test_bsp_button.c` covers the key-wake preparation, and
+flash encoding, and the page model), `tests/test_hm_nvs.c` (the history in an
+in-memory NVS), `tests/test_work_bar.c` (the work-time bar at UTC+8: every
+second of a work day, the hour rounding, the colour thresholds, other windows
+and an unset clock) and `tests/test_app_flow.c` (every page and connection
+transition),
+besides the existing SonicLink and repository checks.
+`tests/test_bsp_button.c` covers the key-wake preparation, and
 `tests/test_deep_sleep_contract.py` checks that the idle power-off follows the
 BSP's shutdown order.
 
@@ -236,7 +278,11 @@ standby current of this sleep has not been measured.
 - Days follow GitHub's public calendar, which uses UTC; a contribution made in
   the morning in Australia can appear on the previous day.
 - After power-on the device shows the history as of its last download until
-  Wi-Fi connects; it has no clock of its own.
+  Wi-Fi connects.
+- The work-time bar uses the fixed UTC+8 time zone and the same hours every
+  day, weekends included. Asleep, the clock runs on the chip's internal RC
+  oscillator and can drift by minutes over long sleeps; it is corrected each
+  time Wi-Fi connects.
 - The main page depends on the third-party API or on the layout of GitHub's
   calendar page; if both change or are unreachable, it shows **No data**.
 - Both services see the device's IP address and the user name it asks for.

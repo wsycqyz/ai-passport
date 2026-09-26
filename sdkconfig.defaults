@@ -42,3 +42,7 @@ CONFIG_BT_ENABLED=n
 # 此处显式写出以免被改掉）。
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+
+# --- NTP ---
+# 工作时间条的时钟：连上 Wi-Fi 后向 pool.ntp.org 与 time.cloudflare.com 校时。
+CONFIG_LWIP_SNTP_MAX_SERVERS=2

@@ -8,4 +8,20 @@ menu "GitHub contribution heatmap"
             shows. Letters, digits and '-' only; no token is needed because
             the calendar is public.
 
+    config HEATMAP_WORK_START_HOUR
+        int "Work day starts at (hour, UTC+8)"
+        range 0 23
+        default 9
+        help
+            The work-time bar is full until this hour and then drains, one
+            block per hour. The clock is set from NTP and kept at UTC+8.
+
+    config HEATMAP_WORK_END_HOUR
+        int "Work day ends at (hour, UTC+8)"
+        range 1 24
+        default 21
+        help
+            The work-time bar is empty from this hour until midnight. Must be
+            later than the start hour.
+
 endmenu

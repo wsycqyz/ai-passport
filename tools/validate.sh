@@ -87,6 +87,9 @@ run_static_checks() {
         tests/test_hm_nvs.c main/hm_nvs.c main/hm_store.c main/gh_parse.c main/hm_calendar.c \
         -o "${test_dir}/test_hm_nvs"
     "${test_dir}/test_hm_nvs"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_work_bar.c main/work_bar.c -o "${test_dir}/test_work_bar"
+    "${test_dir}/test_work_bar"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_deep_sleep_contract.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_check_repo.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py

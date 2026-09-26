@@ -19,6 +19,8 @@ idf_component_register(
          "sonic_listener.c"
          "wifi_link.c"
          "wifi_policy.c"
+         "work_bar.c"
+         "clock_sync.c"
          "demo_radio.c"
     INCLUDE_DIRS "."
     REQUIRES bsp sonic_link esp_event esp_http_client esp_netif esp_timer esp_wifi mbedtls nvs_flash
