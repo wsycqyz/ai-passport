@@ -1,7 +1,7 @@
 name: Upstream Sync
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   schedule:
@@ -22,6 +22,15 @@ jobs:
           ref: main
           persist-credentials: false
 
+      - name: Check sync token
+        env:
+          UPSTREAM_SYNC_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+        run: |
+          if [[ -z "$UPSTREAM_SYNC_TOKEN" ]]; then
+            echo "::error::Configure the UPSTREAM_SYNC_TOKEN repository secret with Contents and Workflows write permissions."
+            exit 1
+          fi
+
       # Step 2: run the sync action
       - name: Sync upstream changes
         id: sync
@@ -30,11 +39,11 @@ jobs:
           upstream_sync_repo: FoloToy/ai-passport
           upstream_sync_branch: main
           target_sync_branch: main
-          target_repo_token: ${{ secrets.GITHUB_TOKEN }} # automatically generated, no need to set
+          target_repo_token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
 
       - name: Sync check
         if: failure()
         run: |
-          echo "[Error] 同步失败，请检查日志；若涉及上游 workflow 变更，请手动 Sync Fork，详见 docs/development/ci/CI-sync-main.md。"
-          echo "[Error] Synchronization failed; inspect the logs. For upstream workflow changes, Sync the fork manually; see docs/development/ci/CI-sync-main.md."
+          echo "[Error] 同步失败，请检查日志并确认 UPSTREAM_SYNC_TOKEN 配置正确，详见 docs/development/ci/CI-sync-main.md。"
+          echo "[Error] Synchronization failed; inspect the logs and verify UPSTREAM_SYNC_TOKEN. See docs/development/ci/CI-sync-main.md."
           exit 1
