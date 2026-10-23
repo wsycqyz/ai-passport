@@ -14,9 +14,10 @@ lives in `docs/assets/`, supplements the branch README, which links to it, and i
 proposed upstream. It is therefore not registered in `docs/README.md`, which belongs to
 the upstream baseline.
 
-> [!WARNING]
-> Nothing in this document has been verified on hardware. The firmware build and every
-> host test pass; rendering, audio, timing, power and memory on the device are pending
+> [!NOTE]
+> This document describes the implemented design. The firmware build and every host test
+> pass, and on 2026-10-24 the core flows, sound, power states and memory figures were
+> checked on one board; several device checks remain open
 > (see [section 14](#14-testing-and-verification-status)).
 
 ## Contents
@@ -987,11 +988,15 @@ uids lose theirs, and new uids start fresh. Renumbering a uid therefore resets t
 
 All of them run in `./tools/validate.sh --static` and pass with or without the local
 clip pack; the firmware gate builds, merges and verifies the image. Status after the
-review and QA fix round: build PASS, host tests PASS, device tests NOT RUN. Pending
-device checks: cold boot and wake behavior, the same-frame error hold, Stage 3 animations
-and the underline position, rendering of every screen and string (including a versus ɑ in
-IPA), audio quality at both volumes and around saves with the local pack, the visual
-substitute with the empty pack, persistence across power cycles and deep sleep, the power
-timeline and deep-sleep current, battery thresholds, the HOME toast in place of the start
-line, LVGL pool, heap and stack figures, pet animations, and input on the real key ladder
-including double taps. The branch README lists them as a checklist.
+review and QA fix round: build PASS, host tests PASS, device tests PARTIAL PASS. On
+2026-10-24 one board (ESP32-C3 revision v1.1, private build with the local clip pack)
+passed hands-on checks of HOME, Stage 1 with the error hold, Stage 2, "too easy" into a
+Stage 3 check card, SUMMARY with the pet, sound and the volume cycle with the muted
+highlight, the pause card, the dim, screen-off, deep-sleep and key-wake timeline with
+progress kept, and a versus ɑ in IPA; its serial log showed no errors, an LVGL pool peak of
+about 17 KB of 46 KB, at least 183 KB of free heap and saves of 4-5 ms. Still pending:
+every bank entry and the longest layouts on screen, spot checks, test-me-later cards,
+pause to HOME, the level-up animation, persistence across a full power cycle, deep sleep
+postponed by a held key and the deep-sleep current, battery thresholds and warnings, the
+HOME toast in place of the start line, a build with the empty clip pack, and input on the
+real key ladder including double taps. The branch README lists them as a checklist.

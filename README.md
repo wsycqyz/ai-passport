@@ -19,10 +19,10 @@ decisions and the word-bank data contract are in the
 [Word Buddy design document](docs/assets/word-buddy-design.md); asset sources, licenses
 and regeneration commands are in [assets/README.md](assets/README.md).
 
-> [!WARNING]
-> **Not yet tested on hardware.** The firmware builds and every host test passes, but
-> nothing has been run on a device. Statements about rendering, sound, timing and power
-> describe the implemented behavior, not measurements. See
+> [!NOTE]
+> **Partly tested on hardware.** On 2026-10-24 the firmware ran on one AI Passport board
+> (ESP32-C3 revision v1.1): the core flows, sound, power states and the IPA font passed
+> hands-on checks, and the serial log showed no errors. Several checks are still open; see
 > [Verification status](#verification-status).
 
 > [!CAUTION]
@@ -535,7 +535,8 @@ whose configure log reports the local test clip pack on your own machine and dev
 
 ## Known limitations
 
-- Nothing has been verified on hardware yet (see [Verification status](#verification-status)).
+- Only part of the behavior has been checked on hardware, on one board (see
+  [Verification status](#verification-status)).
 - Only the 48-entry test bank is available; the user word-bank pipeline is deferred.
 - Builds from the repository, including CI, have no word audio: the private test clips
   are local only. Words use the visual substitute, and the Stage 2 cloze-sentence front
@@ -565,40 +566,47 @@ After the review and QA fix round on this branch:
 ```text
 Build: PASS (firmware gate: build, merged image, layout check, archive)
 Host tests: PASS (static gate, including the QA system tests)
-Device tests: NOT RUN
+Device tests: PARTIAL PASS (one board, 2026-10-24; see below)
 ```
 
-Device checks still pending:
+Device test on 2026-10-24: one AI Passport board (ESP32-C3 revision v1.1), flashed with the
+merged image of a private build that embeds the local test clip pack. The board was operated
+by hand while the serial log was captured for about 8 minutes.
 
-1. Cold boot shows HOME within 2 s, the backlight turns on only after HOME is drawn, and
-   nothing sounds.
-2. A wrong Stage 1 answer hides the wrong panel in the same frame, turns the correct panel
-   green and plays the word; keys stay ignored for 1.5 s.
-3. In Stage 3 the blank blinks, the shake is visible, success shows the whole word in
-   green, the row never shifts, and the visual-substitute underline stays above the prompt.
-4. Every screen renders every Chinese string and bank meaning without missing-glyph
-   boxes, clipping or text in the rounded corners, including the longest layouts
-   (*Good morning* skeleton, *Nice to meet you*, two-line cloze sentences, a Stage 2 back
-   with a two-line example); in the IPA line, a and ɑ are distinguishable.
-5. With the local clip pack: clips and cues play cleanly at 80 % and 30 %, also around
-   saves; mute is silent; the icon matches the level; cues and words are balanced; no
-   gaps in playback. With the empty pack: every word shows the visual substitute and the
-   cues still play.
-6. Progress, session tick, XP and volume survive a power cycle and a deep-sleep wake
-   (flashing that keeps NVS).
-7. Dimming at 20 s, screen off at 30 s and deep sleep at 150 s; key wake to HOME with the
-   waking press ignored; deep sleep postponed while a key is held; the deep-sleep current
-   is measured.
-8. Battery icon thresholds and HOME warnings with real fuel-gauge readings; on HOME a
-   volume toast takes the place of the start line and the line comes back afterwards.
-9. Memory from the boot log: the `widgets created` line and the first line per screen
-   (LVGL pool largest free block at least 4 KB, free heap at least 40 KB, app task stack),
-   and the audio worker stack high-water mark.
-10. Animations: pet idle and blink, eating and jumping, the level-up recolor with its
-    jingle, panel nudge and confirm flash.
-11. Input on the real key ladder: no phantom clicks during long holds; a double tap
-    answers once; a waking double tap only wakes; a double tap that started on the
-    previous card does nothing on the new card; reflex presses on a new card are ignored.
+Passed:
+
+1. HOME renders the pet, level title, XP bar, battery percentage and start line without
+   missing-glyph boxes or text in the rounded corners; the app reports ready about 0.8 s
+   after reset.
+2. Stage 1 with the enforced error hold; SUMMARY with XP and the pet's eating and jumping;
+   Stage 2 in the following set; "too easy" leading to a Stage 3 check card with the
+   blinking blank and the shake on a wrong pick.
+3. Word clips and cues sound clean, also around the SUMMARY save; the volume cycle and the
+   muted visual highlight work.
+4. The pause card; dimming, screen off, deep sleep and key wake back to HOME with progress
+   kept.
+5. In the IPA line, a and ɑ are distinguishable.
+6. Serial log: no errors or warnings; the LVGL pool used at most about 17 KB of 46 KB with
+   a largest free block of at least 28 KB; at least 183 KB of heap stayed free; at least
+   3.1 KB stayed free on the app task stack and 2.6 KB on the audio worker stack; each save
+   took 4-5 ms.
+
+Still pending:
+
+1. Every bank entry and the longest layouts (*Good morning* skeleton, *Nice to meet you*,
+   two-line cloze sentences, a Stage 2 back with a two-line example) on screen.
+2. Spot check, test-me-later cards, pause to HOME, and the level-up recolor with its
+   jingle.
+3. Progress kept across a full power cycle (only the deep-sleep wake was checked), deep
+   sleep postponed while a key is held, and the deep-sleep current.
+4. Battery icon thresholds and the low-battery HOME warnings with real fuel-gauge readings;
+   on HOME a volume toast takes the place of the start line and the line comes back
+   afterwards.
+5. A build with the empty clip pack (as CI produces it): every word shows the visual
+   substitute and the cues still play.
+6. Input on the real key ladder: no phantom clicks during long holds; a double tap answers
+   once; a waking double tap only wakes; a double tap that started on the previous card does
+   nothing on the new card; reflex presses on a new card are ignored.
 
 ## Where things are
 
