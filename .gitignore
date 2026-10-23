@@ -11,3 +11,8 @@ managed_components/
 /.agents/skills/passport-build
 /.agents/skills/passport-device-test
 /.agents/skills/passport-debug
+
+# Word Buddy: private Windows-TTS test clips (amendment A6). Local artifacts of
+# tools/vocab_audio/build_clips.py; the committed empty pack vocab_clips_empty.bin stays tracked.
+/assets/audio/vocab_test_clips.bin
+/assets/audio/vocab_test_clips.csv

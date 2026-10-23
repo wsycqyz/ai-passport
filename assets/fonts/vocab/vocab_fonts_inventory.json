@@ -1,0 +1,221 @@
+{
+  "generator": "tools/vocab_fonts.py 1.0",
+  "generate_command": "PYTHONPATH=<dir with Pillow> python3 tools/vocab_fonts.py generate --fonts-src <dir with the pinned source fonts>",
+  "check_command": "python3 tools/vocab_fonts.py --check",
+  "rasterizer": {
+    "pillow": "13.0.0",
+    "freetype": "2.14.3",
+    "python": "3.12.10",
+    "method": "ImageDraw.text(anchor='ls'), BASIC layout, FreeType default hinting; 4-bit level = round(coverage * 15 / 255); tight ink boxes"
+  },
+  "format": "LVGL 9.5 fmt_txt: PLAIN 4 bpp, high nibble first, byte-aligned glyphs, rows unpadded (stride 0), FORMAT0_TINY U+0020..U+007E + SPARSE_TINY, no kerning, line_height/base_line = ink extents of the subset",
+  "inventory_sources": "string literals of main/main.c and main/vocab_*.{c,h} (comments excluded), bank zh/ipa/English fields of main/vocab_bank.c, spec 13 extras, amendment A5 IPA set",
+  "inventory": {
+    "cjk_role_non_ascii": "·…▲▼●。一上下不个主么之习书了交人什任休低住你保停充公兴再写军冠冰出击刚到勇包升单可吗听唱啦嘴回坐填士声大太奶好始子字存学它完家对小就尺已巴师库度开很徒得忘思息想意成我战手才打拼按挑掌探接握新无早时明星是暂更朵来果查格梨检棒次歌正母水汁汽法泳淇淋游满火牛狗猫王瓜用电的直看睡确空突立笔等答简系红级组经继续绵绿羊翻老考耳联脚自船色苹蓝蕉虎蛋行西要见觉认记评识词试请谢象起跑跳车达还进选遍里量钢铅错键长险静面音页香验高鸡鸭黄鼻！（），：？",
+    "ipa_role_non_ascii": "æŋɑɒɔəɡɪʃʊʌʒˈˌːθ",
+    "lvgl_symbols": "",
+    "bank_entries": 48
+  },
+  "licenses": {
+    "Andika-OFL.txt": "606ead84f13ad76815f6f7ffbc2d6e2d01d91ed523b9500a0e6b72753144e4bc",
+    "NotoSansCJK-LICENSE.txt": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+  },
+  "fonts": {
+    "vocab_font_en_36": {
+      "role": "F_EN_L",
+      "source": "Andika-Bold.ttf",
+      "source_family": "Andika Bold",
+      "source_version": "Version 7.000",
+      "source_sha256": "3ad43a77a29ea060528be69a9e0e81c9dbbe8dff894a26ae1818d3c472393319",
+      "copyright": "Copyright (c) 2004-2025 SIL Global",
+      "license_file": "assets/fonts/vocab/Andika-OFL.txt",
+      "size_px": 36,
+      "bpp": 4,
+      "line_height": 37,
+      "base_line": 8,
+      "underline": [
+        -2,
+        1
+      ],
+      "glyphs": 95,
+      "bitmap_bytes": 19527,
+      "flash_estimate_bytes": 20391,
+      "cmaps": [
+        "FORMAT0_TINY U+0020..U+007E (95 code points)"
+      ],
+      "alternates": {},
+      "codepoints": "U+0020 U+0021 U+0022 U+0023 U+0024 U+0025 U+0026 U+0027 U+0028 U+0029 U+002A U+002B U+002C U+002D U+002E U+002F U+0030 U+0031 U+0032 U+0033 U+0034 U+0035 U+0036 U+0037 U+0038 U+0039 U+003A U+003B U+003C U+003D U+003E U+003F U+0040 U+0041 U+0042 U+0043 U+0044 U+0045 U+0046 U+0047 U+0048 U+0049 U+004A U+004B U+004C U+004D U+004E U+004F U+0050 U+0051 U+0052 U+0053 U+0054 U+0055 U+0056 U+0057 U+0058 U+0059 U+005A U+005B U+005C U+005D U+005E U+005F U+0060 U+0061 U+0062 U+0063 U+0064 U+0065 U+0066 U+0067 U+0068 U+0069 U+006A U+006B U+006C U+006D U+006E U+006F U+0070 U+0071 U+0072 U+0073 U+0074 U+0075 U+0076 U+0077 U+0078 U+0079 U+007A U+007B U+007C U+007D U+007E",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+      "c_sha256": "7099b4414331e03acd5e9b8be415f69cb0fff2de4ce42ef4b636b2964ae66af4"
+    },
+    "vocab_font_en_28": {
+      "role": "F_EN_M",
+      "source": "Andika-Bold.ttf",
+      "source_family": "Andika Bold",
+      "source_version": "Version 7.000",
+      "source_sha256": "3ad43a77a29ea060528be69a9e0e81c9dbbe8dff894a26ae1818d3c472393319",
+      "copyright": "Copyright (c) 2004-2025 SIL Global",
+      "license_file": "assets/fonts/vocab/Andika-OFL.txt",
+      "size_px": 28,
+      "bpp": 4,
+      "line_height": 29,
+      "base_line": 6,
+      "underline": [
+        -2,
+        1
+      ],
+      "glyphs": 95,
+      "bitmap_bytes": 12110,
+      "flash_estimate_bytes": 12974,
+      "cmaps": [
+        "FORMAT0_TINY U+0020..U+007E (95 code points)"
+      ],
+      "alternates": {},
+      "codepoints": "U+0020 U+0021 U+0022 U+0023 U+0024 U+0025 U+0026 U+0027 U+0028 U+0029 U+002A U+002B U+002C U+002D U+002E U+002F U+0030 U+0031 U+0032 U+0033 U+0034 U+0035 U+0036 U+0037 U+0038 U+0039 U+003A U+003B U+003C U+003D U+003E U+003F U+0040 U+0041 U+0042 U+0043 U+0044 U+0045 U+0046 U+0047 U+0048 U+0049 U+004A U+004B U+004C U+004D U+004E U+004F U+0050 U+0051 U+0052 U+0053 U+0054 U+0055 U+0056 U+0057 U+0058 U+0059 U+005A U+005B U+005C U+005D U+005E U+005F U+0060 U+0061 U+0062 U+0063 U+0064 U+0065 U+0066 U+0067 U+0068 U+0069 U+006A U+006B U+006C U+006D U+006E U+006F U+0070 U+0071 U+0072 U+0073 U+0074 U+0075 U+0076 U+0077 U+0078 U+0079 U+007A U+007B U+007C U+007D U+007E",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+      "c_sha256": "07c5044446a1b7f87b38c0d483c4a9fdd4c7e9042e82d7090830e290c63ee8f2"
+    },
+    "vocab_font_en_22": {
+      "role": "F_EN_S",
+      "source": "Andika-Bold.ttf",
+      "source_family": "Andika Bold",
+      "source_version": "Version 7.000",
+      "source_sha256": "3ad43a77a29ea060528be69a9e0e81c9dbbe8dff894a26ae1818d3c472393319",
+      "copyright": "Copyright (c) 2004-2025 SIL Global",
+      "license_file": "assets/fonts/vocab/Andika-OFL.txt",
+      "size_px": 22,
+      "bpp": 4,
+      "line_height": 23,
+      "base_line": 5,
+      "underline": [
+        -1,
+        1
+      ],
+      "glyphs": 95,
+      "bitmap_bytes": 7453,
+      "flash_estimate_bytes": 8317,
+      "cmaps": [
+        "FORMAT0_TINY U+0020..U+007E (95 code points)"
+      ],
+      "alternates": {},
+      "codepoints": "U+0020 U+0021 U+0022 U+0023 U+0024 U+0025 U+0026 U+0027 U+0028 U+0029 U+002A U+002B U+002C U+002D U+002E U+002F U+0030 U+0031 U+0032 U+0033 U+0034 U+0035 U+0036 U+0037 U+0038 U+0039 U+003A U+003B U+003C U+003D U+003E U+003F U+0040 U+0041 U+0042 U+0043 U+0044 U+0045 U+0046 U+0047 U+0048 U+0049 U+004A U+004B U+004C U+004D U+004E U+004F U+0050 U+0051 U+0052 U+0053 U+0054 U+0055 U+0056 U+0057 U+0058 U+0059 U+005A U+005B U+005C U+005D U+005E U+005F U+0060 U+0061 U+0062 U+0063 U+0064 U+0065 U+0066 U+0067 U+0068 U+0069 U+006A U+006B U+006C U+006D U+006E U+006F U+0070 U+0071 U+0072 U+0073 U+0074 U+0075 U+0076 U+0077 U+0078 U+0079 U+007A U+007B U+007C U+007D U+007E",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+      "c_sha256": "45348e677090607da91c718d210e209263454d6d7243bdd4f4aad8a508d3950f"
+    },
+    "vocab_font_en_18": {
+      "role": "F_EN_XS",
+      "source": "Andika-Regular.ttf",
+      "source_family": "Andika Regular",
+      "source_version": "Version 7.000",
+      "source_sha256": "27484fdc98d0d63f90407f8266e28295f6fb16d2b13c5024df0214f17152919a",
+      "copyright": "Copyright (c) 2004-2025 SIL Global",
+      "license_file": "assets/fonts/vocab/Andika-OFL.txt",
+      "size_px": 18,
+      "bpp": 4,
+      "line_height": 19,
+      "base_line": 4,
+      "underline": [
+        -1,
+        1
+      ],
+      "glyphs": 95,
+      "bitmap_bytes": 4958,
+      "flash_estimate_bytes": 5822,
+      "cmaps": [
+        "FORMAT0_TINY U+0020..U+007E (95 code points)"
+      ],
+      "alternates": {},
+      "codepoints": "U+0020 U+0021 U+0022 U+0023 U+0024 U+0025 U+0026 U+0027 U+0028 U+0029 U+002A U+002B U+002C U+002D U+002E U+002F U+0030 U+0031 U+0032 U+0033 U+0034 U+0035 U+0036 U+0037 U+0038 U+0039 U+003A U+003B U+003C U+003D U+003E U+003F U+0040 U+0041 U+0042 U+0043 U+0044 U+0045 U+0046 U+0047 U+0048 U+0049 U+004A U+004B U+004C U+004D U+004E U+004F U+0050 U+0051 U+0052 U+0053 U+0054 U+0055 U+0056 U+0057 U+0058 U+0059 U+005A U+005B U+005C U+005D U+005E U+005F U+0060 U+0061 U+0062 U+0063 U+0064 U+0065 U+0066 U+0067 U+0068 U+0069 U+006A U+006B U+006C U+006D U+006E U+006F U+0070 U+0071 U+0072 U+0073 U+0074 U+0075 U+0076 U+0077 U+0078 U+0079 U+007A U+007B U+007C U+007D U+007E",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+      "c_sha256": "4b58b5d28bbb4832864cfbb48adfb341c8d9c9450db39833cec7ab8e05eeddca"
+    },
+    "vocab_font_ipa_18": {
+      "role": "F_IPA",
+      "source": "Andika-Regular.ttf",
+      "source_family": "Andika Regular",
+      "source_version": "Version 7.000",
+      "source_sha256": "27484fdc98d0d63f90407f8266e28295f6fb16d2b13c5024df0214f17152919a",
+      "copyright": "Copyright (c) 2004-2025 SIL Global",
+      "license_file": "assets/fonts/vocab/Andika-OFL.txt",
+      "size_px": 18,
+      "bpp": 4,
+      "line_height": 20,
+      "base_line": 5,
+      "underline": [
+        -1,
+        1
+      ],
+      "glyphs": 111,
+      "bitmap_bytes": 5646,
+      "flash_estimate_bytes": 6694,
+      "cmaps": [
+        "FORMAT0_TINY U+0020..U+007E (95 code points)",
+        "SPARSE_TINY U+00E6..U+03B8 (16 code points)"
+      ],
+      "alternates": {
+        "U+0061": "double-storey a (ss13, glyph 301; default glyph 68)"
+      },
+      "codepoints": "U+0020 U+0021 U+0022 U+0023 U+0024 U+0025 U+0026 U+0027 U+0028 U+0029 U+002A U+002B U+002C U+002D U+002E U+002F U+0030 U+0031 U+0032 U+0033 U+0034 U+0035 U+0036 U+0037 U+0038 U+0039 U+003A U+003B U+003C U+003D U+003E U+003F U+0040 U+0041 U+0042 U+0043 U+0044 U+0045 U+0046 U+0047 U+0048 U+0049 U+004A U+004B U+004C U+004D U+004E U+004F U+0050 U+0051 U+0052 U+0053 U+0054 U+0055 U+0056 U+0057 U+0058 U+0059 U+005A U+005B U+005C U+005D U+005E U+005F U+0060 U+0061 U+0062 U+0063 U+0064 U+0065 U+0066 U+0067 U+0068 U+0069 U+006A U+006B U+006C U+006D U+006E U+006F U+0070 U+0071 U+0072 U+0073 U+0074 U+0075 U+0076 U+0077 U+0078 U+0079 U+007A U+007B U+007C U+007D U+007E U+00E6 U+014B U+0251 U+0252 U+0254 U+0259 U+0261 U+026A U+0283 U+028A U+028C U+0292 U+02C8 U+02CC U+02D0 U+03B8",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~æŋɑɒɔəɡɪʃʊʌʒˈˌːθ",
+      "c_sha256": "4a4f09443495a586febbc715d521dea835ffbd7bfebd24938b7751fb16d9a9d4",
+      "a_vs_alpha_pixels": 37
+    },
+    "vocab_font_zh_22": {
+      "role": "F_ZH_L",
+      "source": "NotoSansSC-Medium.otf",
+      "source_family": "Noto Sans SC Medium Regular",
+      "source_version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+      "source_sha256": "7633f5a016d4dd95e685a69633d818aabc4644c4b08e26bd35b1b30c45ed5dda",
+      "copyright": "© 2014-2021 Adobe (http://www.adobe.com/).",
+      "license_file": "assets/fonts/vocab/NotoSansCJK-LICENSE.txt",
+      "size_px": 22,
+      "bpp": 4,
+      "line_height": 26,
+      "base_line": 6,
+      "underline": [
+        -3,
+        1
+      ],
+      "glyphs": 314,
+      "bitmap_bytes": 55097,
+      "flash_estimate_bytes": 58175,
+      "cmaps": [
+        "FORMAT0_TINY U+0020..U+007E (95 code points)",
+        "SPARSE_TINY U+00B7..U+FF1F (219 code points)"
+      ],
+      "alternates": {},
+      "codepoints": "U+0020 U+0021 U+0022 U+0023 U+0024 U+0025 U+0026 U+0027 U+0028 U+0029 U+002A U+002B U+002C U+002D U+002E U+002F U+0030 U+0031 U+0032 U+0033 U+0034 U+0035 U+0036 U+0037 U+0038 U+0039 U+003A U+003B U+003C U+003D U+003E U+003F U+0040 U+0041 U+0042 U+0043 U+0044 U+0045 U+0046 U+0047 U+0048 U+0049 U+004A U+004B U+004C U+004D U+004E U+004F U+0050 U+0051 U+0052 U+0053 U+0054 U+0055 U+0056 U+0057 U+0058 U+0059 U+005A U+005B U+005C U+005D U+005E U+005F U+0060 U+0061 U+0062 U+0063 U+0064 U+0065 U+0066 U+0067 U+0068 U+0069 U+006A U+006B U+006C U+006D U+006E U+006F U+0070 U+0071 U+0072 U+0073 U+0074 U+0075 U+0076 U+0077 U+0078 U+0079 U+007A U+007B U+007C U+007D U+007E U+00B7 U+2026 U+25B2 U+25BC U+25CF U+3002 U+4E00 U+4E0A U+4E0B U+4E0D U+4E2A U+4E3B U+4E48 U+4E4B U+4E60 U+4E66 U+4E86 U+4EA4 U+4EBA U+4EC0 U+4EFB U+4F11 U+4F4E U+4F4F U+4F60 U+4FDD U+505C U+5145 U+516C U+5174 U+518D U+5199 U+519B U+51A0 U+51B0 U+51FA U+51FB U+521A U+5230 U+52C7 U+5305 U+5347 U+5355 U+53EF U+5417 U+542C U+5531 U+5566 U+5634 U+56DE U+5750 U+586B U+58EB U+58F0 U+5927 U+592A U+5976 U+597D U+59CB U+5B50 U+5B57 U+5B58 U+5B66 U+5B83 U+5B8C U+5BB6 U+5BF9 U+5C0F U+5C31 U+5C3A U+5DF2 U+5DF4 U+5E08 U+5E93 U+5EA6 U+5F00 U+5F88 U+5F92 U+5F97 U+5FD8 U+601D U+606F U+60F3 U+610F U+6210 U+6211 U+6218 U+624B U+624D U+6253 U+62FC U+6309 U+6311 U+638C U+63A2 U+63A5 U+63E1 U+65B0 U+65E0 U+65E9 U+65F6 U+660E U+661F U+662F U+6682 U+66F4 U+6735 U+6765 U+679C U+67E5 U+683C U+68A8 U+68C0 U+68D2 U+6B21 U+6B4C U+6B63 U+6BCD U+6C34 U+6C41 U+6C7D U+6CD5 U+6CF3 U+6DC7 U+6DCB U+6E38 U+6EE1 U+706B U+725B U+72D7 U+732B U+738B U+74DC U+7528 U+7535 U+7684 U+76F4 U+770B U+7761 U+786E U+7A7A U+7A81 U+7ACB U+7B14 U+7B49 U+7B54 U+7B80 U+7CFB U+7EA2 U+7EA7 U+7EC4 U+7ECF U+7EE7 U+7EED U+7EF5 U+7EFF U+7F8A U+7FFB U+8001 U+8003 U+8033 U+8054 U+811A U+81EA U+8239 U+8272 U+82F9 U+84DD U+8549 U+864E U+86CB U+884C U+897F U+8981 U+89C1 U+89C9 U+8BA4 U+8BB0 U+8BC4 U+8BC6 U+8BCD U+8BD5 U+8BF7 U+8C22 U+8C61 U+8D77 U+8DD1 U+8DF3 U+8F66 U+8FBE U+8FD8 U+8FDB U+9009 U+904D U+91CC U+91CF U+94A2 U+94C5 U+9519 U+952E U+957F U+9669 U+9759 U+9762 U+97F3 U+9875 U+9999 U+9A8C U+9AD8 U+9E21 U+9E2D U+9EC4 U+9F3B U+FF01 U+FF08 U+FF09 U+FF0C U+FF1A U+FF1F",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~·…▲▼●。一上下不个主么之习书了交人什任休低住你保停充公兴再写军冠冰出击刚到勇包升单可吗听唱啦嘴回坐填士声大太奶好始子字存学它完家对小就尺已巴师库度开很徒得忘思息想意成我战手才打拼按挑掌探接握新无早时明星是暂更朵来果查格梨检棒次歌正母水汁汽法泳淇淋游满火牛狗猫王瓜用电的直看睡确空突立笔等答简系红级组经继续绵绿羊翻老考耳联脚自船色苹蓝蕉虎蛋行西要见觉认记评识词试请谢象起跑跳车达还进选遍里量钢铅错键长险静面音页香验高鸡鸭黄鼻！（），：？",
+      "c_sha256": "5c888a6d3e1b1cdd1ea7240bf571025c5b0cd13c5011ea5921ebeb0077e1c6d8"
+    },
+    "vocab_font_zh_16": {
+      "role": "F_ZH_S",
+      "source": "NotoSansSC-Regular.otf",
+      "source_family": "Noto Sans SC Regular",
+      "source_version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+      "source_sha256": "faa6c9df652116dde789d351359f3d7e5d2285a2b2a1f04a2d7244df706d5ea9",
+      "copyright": "© 2014-2021 Adobe (http://www.adobe.com/).",
+      "license_file": "assets/fonts/vocab/NotoSansCJK-LICENSE.txt",
+      "size_px": 16,
+      "bpp": 4,
+      "line_height": 19,
+      "base_line": 5,
+      "underline": [
+        -2,
+        1
+      ],
+      "glyphs": 314,
+      "bitmap_bytes": 30023,
+      "flash_estimate_bytes": 33101,
+      "cmaps": [
+        "FORMAT0_TINY U+0020..U+007E (95 code points)",
+        "SPARSE_TINY U+00B7..U+FF1F (219 code points)"
+      ],
+      "alternates": {},
+      "codepoints": "U+0020 U+0021 U+0022 U+0023 U+0024 U+0025 U+0026 U+0027 U+0028 U+0029 U+002A U+002B U+002C U+002D U+002E U+002F U+0030 U+0031 U+0032 U+0033 U+0034 U+0035 U+0036 U+0037 U+0038 U+0039 U+003A U+003B U+003C U+003D U+003E U+003F U+0040 U+0041 U+0042 U+0043 U+0044 U+0045 U+0046 U+0047 U+0048 U+0049 U+004A U+004B U+004C U+004D U+004E U+004F U+0050 U+0051 U+0052 U+0053 U+0054 U+0055 U+0056 U+0057 U+0058 U+0059 U+005A U+005B U+005C U+005D U+005E U+005F U+0060 U+0061 U+0062 U+0063 U+0064 U+0065 U+0066 U+0067 U+0068 U+0069 U+006A U+006B U+006C U+006D U+006E U+006F U+0070 U+0071 U+0072 U+0073 U+0074 U+0075 U+0076 U+0077 U+0078 U+0079 U+007A U+007B U+007C U+007D U+007E U+00B7 U+2026 U+25B2 U+25BC U+25CF U+3002 U+4E00 U+4E0A U+4E0B U+4E0D U+4E2A U+4E3B U+4E48 U+4E4B U+4E60 U+4E66 U+4E86 U+4EA4 U+4EBA U+4EC0 U+4EFB U+4F11 U+4F4E U+4F4F U+4F60 U+4FDD U+505C U+5145 U+516C U+5174 U+518D U+5199 U+519B U+51A0 U+51B0 U+51FA U+51FB U+521A U+5230 U+52C7 U+5305 U+5347 U+5355 U+53EF U+5417 U+542C U+5531 U+5566 U+5634 U+56DE U+5750 U+586B U+58EB U+58F0 U+5927 U+592A U+5976 U+597D U+59CB U+5B50 U+5B57 U+5B58 U+5B66 U+5B83 U+5B8C U+5BB6 U+5BF9 U+5C0F U+5C31 U+5C3A U+5DF2 U+5DF4 U+5E08 U+5E93 U+5EA6 U+5F00 U+5F88 U+5F92 U+5F97 U+5FD8 U+601D U+606F U+60F3 U+610F U+6210 U+6211 U+6218 U+624B U+624D U+6253 U+62FC U+6309 U+6311 U+638C U+63A2 U+63A5 U+63E1 U+65B0 U+65E0 U+65E9 U+65F6 U+660E U+661F U+662F U+6682 U+66F4 U+6735 U+6765 U+679C U+67E5 U+683C U+68A8 U+68C0 U+68D2 U+6B21 U+6B4C U+6B63 U+6BCD U+6C34 U+6C41 U+6C7D U+6CD5 U+6CF3 U+6DC7 U+6DCB U+6E38 U+6EE1 U+706B U+725B U+72D7 U+732B U+738B U+74DC U+7528 U+7535 U+7684 U+76F4 U+770B U+7761 U+786E U+7A7A U+7A81 U+7ACB U+7B14 U+7B49 U+7B54 U+7B80 U+7CFB U+7EA2 U+7EA7 U+7EC4 U+7ECF U+7EE7 U+7EED U+7EF5 U+7EFF U+7F8A U+7FFB U+8001 U+8003 U+8033 U+8054 U+811A U+81EA U+8239 U+8272 U+82F9 U+84DD U+8549 U+864E U+86CB U+884C U+897F U+8981 U+89C1 U+89C9 U+8BA4 U+8BB0 U+8BC4 U+8BC6 U+8BCD U+8BD5 U+8BF7 U+8C22 U+8C61 U+8D77 U+8DD1 U+8DF3 U+8F66 U+8FBE U+8FD8 U+8FDB U+9009 U+904D U+91CC U+91CF U+94A2 U+94C5 U+9519 U+952E U+957F U+9669 U+9759 U+9762 U+97F3 U+9875 U+9999 U+9A8C U+9AD8 U+9E21 U+9E2D U+9EC4 U+9F3B U+FF01 U+FF08 U+FF09 U+FF0C U+FF1A U+FF1F",
+      "chars": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~·…▲▼●。一上下不个主么之习书了交人什任休低住你保停充公兴再写军冠冰出击刚到勇包升单可吗听唱啦嘴回坐填士声大太奶好始子字存学它完家对小就尺已巴师库度开很徒得忘思息想意成我战手才打拼按挑掌探接握新无早时明星是暂更朵来果查格梨检棒次歌正母水汁汽法泳淇淋游满火牛狗猫王瓜用电的直看睡确空突立笔等答简系红级组经继续绵绿羊翻老考耳联脚自船色苹蓝蕉虎蛋行西要见觉认记评识词试请谢象起跑跳车达还进选遍里量钢铅错键长险静面音页香验高鸡鸭黄鼻！（），：？",
+      "c_sha256": "1ce16cd8e2ff050eccb19c37321f7b4bd2faea588e0710acb727bc79fe2652b7"
+    }
+  },
+  "flash_estimate_total_bytes": 145474
+}

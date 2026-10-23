@@ -1,0 +1,4 @@
+# Word clip pack (tools/vocab_audio/build_clips.py): keep the blob byte-exact and the
+# manifest hashes stable on every checkout.
+*.bin binary
+*.csv text eol=lf

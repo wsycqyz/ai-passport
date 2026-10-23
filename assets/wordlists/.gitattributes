@@ -1,0 +1,3 @@
+# Common-word list and license copy (tools/vocab_wordlist.py): the --check mode compares
+# these files byte for byte, so keep LF line endings on every checkout.
+* text eol=lf
